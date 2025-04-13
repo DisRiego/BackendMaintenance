@@ -5,7 +5,8 @@ from sqlalchemy import text
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-from app.maintenance.models import Vars
+from app.maintenance.models import Maintenance, MaintenanceDetail, DeviceIot, Lot, PropertyLot, Property, PropertyUser, User, TechnicianAssignment, TypeFailure, FailureSolution, Vars
+from app.maintenance.schemas import MaintenanceDetailResponseSchema
 
 class MaintenenceService:
     def __init__(self, db: Session):
@@ -48,3 +49,46 @@ class MaintenenceService:
                     }
                 }
             )
+            
+    def get_maintenance_details(self, maintenance_id: int) -> MaintenanceDetailResponseSchema:
+        maintenance = self.db.query(Maintenance).filter(Maintenance.id == maintenance_id).first()
+
+        if not maintenance:
+            raise HTTPException(status_code=404, detail="Mantenimiento no encontrado")
+
+        detail = self.db.query(MaintenanceDetail).filter(MaintenanceDetail.maintenance_id == maintenance_id).first()
+
+        device = maintenance.device_iot
+        lot = device.lot if device else None
+
+        property_lot = self.db.query(PropertyLot).filter(PropertyLot.lot_id == lot.id).first() if lot else None
+        property_obj = self.db.query(Property).filter(Property.id == property_lot.property_id).first() if property_lot else None
+
+        property_user = self.db.query(PropertyUser).filter(PropertyUser.property_id == property_obj.id).first() if property_obj else None
+        owner = self.db.query(User).filter(User.id == property_user.user_id).first() if property_user else None
+
+        technician_user = None
+        if detail and detail.technician_assignment_id:
+            assignment = self.db.query(TechnicianAssignment).filter(TechnicianAssignment.id == detail.technician_assignment_id).first()
+            if assignment:
+                technician_user = assignment.technician_user
+
+        return MaintenanceDetailResponseSchema(
+            fecha_revision=maintenance.date,
+            fecha_finalizacion=maintenance.date if maintenance.status == 2 else None,  # Suponiendo que 2 es "Finalizado"
+            predio_nombre=property_obj.name if property_obj else None,
+            lote_nombre=lot.name if lot else None,
+            documento_usuario_reporto=owner.document_number if owner else None,
+            nombre_propietario=owner.name if owner else None,
+            fecha_reporte=maintenance.date,
+            observaciones=maintenance.description_failure,
+            nombre_tecnico_asignado=technician_user.name if technician_user else None,
+            documento_tecnico_asignado=technician_user.document_number if technician_user else None,
+            tipo_mantenimiento=maintenance.type_failure.name if maintenance.type_failure else None,
+            fallo_detectado=maintenance.description_failure,
+            observaciones_fallo=detail.fault_remarks if detail else None,
+            solucion=detail.failure_solution.name if detail and detail.failure_solution else None,
+            observaciones_solucion=detail.solution_remarks if detail else None,
+            evidencia_fallo=detail.evidence_failure if detail else None,
+            evidencia_solucion=detail.evidence_solution if detail else None
+        )
