@@ -1,4 +1,4 @@
-# DisRiego_IoT
+# DisRiego_Maintenance
 
 Este repositorio contiene el backend de **DisRiego**. La arquitectura está basada en **Python** y se estructura en microservicios. Este documento guía al equipo desde la instalación del entorno de desarrollo, la ejecución de tests y el despliegue, hasta la integración con Docker y CI/CD.
 
