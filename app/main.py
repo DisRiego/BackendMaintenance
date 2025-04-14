@@ -3,7 +3,6 @@ from app.database import Base, engine
 from app.maintenance.routes import router as maintenance_router
 from app.middlewares import setup_middlewares
 from app.exceptions import setup_exception_handlers
-import threading
 
 # **Configurar FastAPI**
 app = FastAPI( 
