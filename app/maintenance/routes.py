@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, Path
 from sqlalchemy.orm import Session
 from typing import Dict, Optional
 from app.database import get_db
+from app.maintenance.schemas import MaintenanceCreateRequest
 from app.maintenance.services import MaintenanceService
 
 router = APIRouter(prefix="/maintenance", tags=["Maintenance"])
@@ -63,3 +64,14 @@ def get_maintenance_by_id(
     """
     maintenance_service = MaintenanceService(db)
     return maintenance_service.get_maintenance_by_id(maintenance_id)
+
+@router.post("/", response_model=Dict, status_code=201)
+def create_maintenance(
+    maintenance_request: MaintenanceCreateRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Crear un nuevo reporte de fallo (mantenimiento).
+    """
+    service = MaintenanceService(db)
+    return service.create_maintenance(maintenance_request.dict())

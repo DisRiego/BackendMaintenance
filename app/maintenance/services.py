@@ -6,6 +6,8 @@ from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 
+from app.maintenance.models import Maintenance
+
 class MaintenanceService:
     def __init__(self, db: Session):
         self.db = db
@@ -360,6 +362,41 @@ class MaintenanceService:
                     "data": {
                         "title": "Error al obtener tipos de fallas",
                         "message": f"Ocurrió un error: {str(e)}"
+                    }
+                }
+            )
+    
+    def create_maintenance(self, maintenance_data: dict):
+        """Crear un nuevo mantenimiento (reporte de fallo)"""
+        try:
+            new_maintenance = Maintenance(
+                device_iot_id=maintenance_data["device_iot_id"],
+                type_failure_id=maintenance_data["type_failure_id"],
+                description_failure=maintenance_data.get("description_failure"),
+                date=maintenance_data.get("date", datetime.utcnow().date()),
+                maintenance_status_id=maintenance_data["maintenance_status_id"]
+            )
+
+            self.db.add(new_maintenance)
+            self.db.commit()
+            self.db.refresh(new_maintenance)
+
+            return JSONResponse(
+                status_code=201,
+                content={
+                    "success": True,
+                    "data": "Reporte de fallo creado exitosamente"
+                }
+            )
+        except Exception as e:
+            self.db.rollback()
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "data": {
+                        "title": "Error al crear mantenimiento",
+                        "message": str(e)
                     }
                 }
             )

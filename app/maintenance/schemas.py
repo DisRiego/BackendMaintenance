@@ -133,3 +133,13 @@ class PaginationParams(BaseModel):
 
 class StatusFilterParams(BaseModel):
     status_id: Optional[int] = Field(None, description="ID del estado para filtrar")
+
+class MaintenanceCreateRequest(BaseModel):
+    device_iot_id: int
+    type_failure_id: int
+    description_failure: Optional[str] = None
+    date: Optional[date] = None  # type: ignore # Si no se envía, se usará la fecha actual
+    maintenance_status_id: int  # Por defecto podrías usar "pendiente"
+
+    class Config:
+        from_attributes = True
