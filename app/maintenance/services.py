@@ -1,7 +1,8 @@
 # app/maintenance/services.py
 
 from datetime import datetime
-from fastapi import HTTPException
+from uuid import uuid4
+from fastapi import HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session, aliased
@@ -10,16 +11,32 @@ from app.maintenance.models import (
     Maintenance,
     MaintenanceReport,
     TechnicianAssignment,
-    TypeFailure,
-    Vars,
+    MaintenanceDetail,
+    FailureSolution,
+    User,
     DeviceIot,
     Lot,
     PropertyLot,
     PropertyUser,
-    User,
+    TypeFailure,
+    Vars,
+    bucket,
     user_role_table,
     role_permission_table,
 )
+from app.maintenance.schemas import MaintenanceDetailCreate
+
+def _upload(file: UploadFile, folder: str) -> str:
+    """
+    Sube un UploadFile a Firebase Storage en la carpeta indicada
+    y devuelve la URL pública.
+    """
+    ext = file.filename.rsplit('.', 1)[-1]
+    blob_name = f"{folder}/{uuid4()}.{ext}"
+    blob = bucket.blob(blob_name)
+    content = file.file.read()
+    blob.upload_from_string(content, content_type=file.content_type)
+    return blob.public_url
 
 class MaintenanceService:
     def __init__(self, db: Session):
@@ -32,7 +49,6 @@ class MaintenanceService:
         """
         try:
             Owner = aliased(User, name="owner")
-
             rows = (
                 self.db.query(
                     Maintenance.id.label("id"),
@@ -52,28 +68,23 @@ class MaintenanceService:
                 .join(Vars, Maintenance.maintenance_status_id == Vars.id)
                 .all()
             )
-
-            data = [
-                {
-                    "id": r.id,
-                    "property_id": r.property_id,
-                    "owner_document": r.owner_document,
-                    "failure_type": r.failure_type,
-                    "description_failure": r.description_failure,
-                    "date": r.date,
-                    "status": r.status,
-                }
-                for r in rows
-            ]
-
-            return JSONResponse(
-                status_code=200,
-                content=jsonable_encoder({"success": True, "data": data})
-            )
+            data = [{
+                "id": r.id,
+                "property_id": r.property_id,
+                "owner_document": r.owner_document,
+                "failure_type": r.failure_type,
+                "description_failure": r.description_failure,
+                "date": r.date,
+                "status": r.status,
+            } for r in rows]
+            return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
         except Exception as e:
             return JSONResponse(status_code=500, content={"success": False, "data": str(e)})
 
     def create_maintenance(self, data):
+        """
+        Crear un nuevo registro en maintenance con status = 24 (Sin asignar).
+        """
         try:
             payload = data.dict()
             payload['maintenance_status_id'] = 24
@@ -86,8 +97,15 @@ class MaintenanceService:
             raise HTTPException(status_code=500, detail=f"Error al crear mantenimiento: {e}")
 
     def assign_technician(self, maintenance_id: int, user_id: int):
-        # 1) permiso 80
-        ok = (
+        """
+        Asignar un técnico a un maintenance:
+          - valida permiso 80
+          - comprueba existencia de maintenance
+          - evita asignaciones duplicadas
+          - cambia status a 23
+        """
+        # permiso 80
+        has_perm = (
             self.db.query(user_role_table)
             .join(role_permission_table, user_role_table.c.rol_id == role_permission_table.c.rol_id)
             .filter(
@@ -96,19 +114,16 @@ class MaintenanceService:
             )
             .first()
         )
-        if not ok:
+        if not has_perm:
             raise HTTPException(status_code=403, detail="Usuario sin permiso 80")
 
-        # 2) existe el mantenimiento?
         maint = self.db.get(Maintenance, maintenance_id)
         if not maint:
             raise HTTPException(status_code=404, detail="Mantenimiento no encontrado")
 
-        # 3) ya asignado?
         if self.db.query(TechnicianAssignment).filter_by(maintenance_id=maintenance_id).first():
             raise HTTPException(status_code=400, detail="Ya existe técnico asignado")
 
-        # 4) asignar y actualizar estado
         assignment = TechnicianAssignment(maintenance_id=maintenance_id, user_id=user_id)
         maint.maintenance_status_id = 23
         self.db.add(assignment)
@@ -116,10 +131,10 @@ class MaintenanceService:
         self.db.refresh(assignment)
 
         result = {
-            "id":              assignment.id,
-            "maintenance_id":  assignment.maintenance_id,
-            "user_id":         assignment.user_id,
-            "assignment_date": assignment.assignment_date
+            "id":             assignment.id,
+            "maintenance_id": assignment.maintenance_id,
+            "user_id":        assignment.user_id,
+            "assignment_date":assignment.assignment_date
         }
         return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": result}))
 
@@ -130,7 +145,6 @@ class MaintenanceService:
         """
         try:
             Owner = aliased(User, name="owner")
-
             rows = (
                 self.db.query(
                     MaintenanceReport.id.label("id"),
@@ -149,29 +163,24 @@ class MaintenanceService:
                 .join(Vars, MaintenanceReport.maintenance_status_id == Vars.id)
                 .all()
             )
-
-            data = [
-                {
-                    "id": r.id,
-                    "property_id": r.property_id,
-                    "lot_id": r.lot_id,
-                    "owner_document": r.owner_document,
-                    "failure_type": r.failure_type,
-                    "description_failure": r.description_failure,
-                    "date": r.date,
-                    "status": r.status,
-                }
-                for r in rows
-            ]
-
-            return JSONResponse(
-                status_code=200,
-                content=jsonable_encoder({"success": True, "data": data})
-            )
+            data = [{
+                "id": r.id,
+                "property_id": r.property_id,
+                "lot_id": r.lot_id,
+                "owner_document": r.owner_document,
+                "failure_type": r.failure_type,
+                "description_failure": r.description_failure,
+                "date": r.date,
+                "status": r.status,
+            } for r in rows]
+            return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
     def create_report(self, data):
+        """
+        Crear un nuevo registro en maintenance_report con status = 24.
+        """
         try:
             payload = data.dict()
             payload['maintenance_status_id'] = 24
@@ -184,7 +193,14 @@ class MaintenanceService:
             raise HTTPException(status_code=500, detail=f"Error al crear reporte: {e}")
 
     def assign_report_technician(self, report_id: int, user_id: int):
-        ok = (
+        """
+        Asignar un técnico a un maintenance_report:
+          - valida permiso 80
+          - comprueba existencia de report
+          - evita duplicados
+          - cambia status a 23
+        """
+        has_perm = (
             self.db.query(user_role_table)
             .join(role_permission_table, user_role_table.c.rol_id == role_permission_table.c.rol_id)
             .filter(
@@ -193,31 +209,34 @@ class MaintenanceService:
             )
             .first()
         )
-        if not ok:
+        if not has_perm:
             raise HTTPException(status_code=403, detail="Usuario sin permiso 80")
 
-        report = self.db.get(MaintenanceReport, report_id)
-        if not report:
+        rpt = self.db.get(MaintenanceReport, report_id)
+        if not rpt:
             raise HTTPException(status_code=404, detail="Reporte no encontrado")
 
         if self.db.query(TechnicianAssignment).filter_by(report_id=report_id).first():
             raise HTTPException(status_code=400, detail="Ya existe técnico asignado")
 
         assignment = TechnicianAssignment(report_id=report_id, user_id=user_id)
-        report.maintenance_status_id = 23
+        rpt.maintenance_status_id = 23
         self.db.add(assignment)
         self.db.commit()
         self.db.refresh(assignment)
 
         result = {
-            "id":              assignment.id,
-            "report_id":       assignment.report_id,
-            "user_id":         assignment.user_id,
+            "id":        assignment.id,
+            "report_id": assignment.report_id,
+            "user_id":   assignment.user_id,
             "assignment_date": assignment.assignment_date
         }
         return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": result}))
 
     def get_users_with_permission(self, permission_id: int = 80):
+        """
+        Obtener todos los usuarios que tengan el permiso indicado.
+        """
         users = (
             self.db.query(User)
             .join(user_role_table, User.id == user_role_table.c.user_id)
@@ -226,14 +245,392 @@ class MaintenanceService:
             .distinct()
             .all()
         )
+        data = [{
+            "id":               u.id,
+            "name":             u.name,
+            "first_last_name":  u.first_last_name,
+            "second_last_name": u.second_last_name,
+            "document_number":  u.document_number
+        } for u in users]
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
+
+    def get_assignments_for_technician(self, technician_id: int):
+        """
+        Devuelve dos listas:
+         - maintenances: asignaciones de maintenance
+         - reports:     asignaciones de maintenance_report
+        """
+        tech = self.db.get(User, technician_id)
+        if not tech:
+            raise HTTPException(status_code=404, detail="Técnico no encontrado")
+
+        Owner = aliased(User, name="owner")
+        A = aliased(TechnicianAssignment, name="asgmt")
+
+        # assignments de maintenance
+        maint_rows = (
+            self.db.query(
+                Maintenance.id.label("maintenance_id"),
+                PropertyLot.property_id.label("property_id"),
+                Owner.document_number.label("owner_document"),
+                TypeFailure.name.label("failure_type"),
+                Maintenance.description_failure,
+                Maintenance.date.label("date"),
+                Vars.name.label("status"),
+                A.assignment_date.label("assigned_at"),
+            )
+            .select_from(A)
+            .join(Maintenance, A.maintenance_id == Maintenance.id)
+            .join(DeviceIot, Maintenance.device_iot_id == DeviceIot.id)
+            .join(Lot, DeviceIot.lot_id == Lot.id)
+            .join(PropertyLot, PropertyLot.lot_id == Lot.id)
+            .join(PropertyUser, PropertyUser.property_id == PropertyLot.property_id)
+            .join(Owner, Owner.id == PropertyUser.user_id)
+            .join(TypeFailure, Maintenance.type_failure_id == TypeFailure.id)
+            .join(Vars, Maintenance.maintenance_status_id == Vars.id)
+            .filter(A.user_id == technician_id, A.maintenance_id != None)
+            .all()
+        )
+        maint_data = [{
+            "maintenance_id":      r.maintenance_id,
+            "property_id":         r.property_id,
+            "owner_document":      r.owner_document,
+            "failure_type":        r.failure_type,
+            "description_failure": r.description_failure,
+            "date":                r.date,
+            "status":              r.status,
+            "assigned_at":         r.assigned_at,
+        } for r in maint_rows]
+
+        # assignments de reportes
+        rep_rows = (
+            self.db.query(
+                MaintenanceReport.id.label("report_id"),
+                MaintenanceReport.lot_id.label("lot_id"),
+                PropertyLot.property_id.label("property_id"),
+                Owner.document_number.label("owner_document"),
+                TypeFailure.name.label("failure_type"),
+                MaintenanceReport.description_failure,
+                MaintenanceReport.date.label("date"),
+                Vars.name.label("status"),
+                A.assignment_date.label("assigned_at"),
+            )
+            .select_from(A)
+            .join(MaintenanceReport, A.report_id == MaintenanceReport.id)
+            .join(PropertyLot, PropertyLot.lot_id == MaintenanceReport.lot_id)
+            .join(PropertyUser, PropertyUser.property_id == PropertyLot.property_id)
+            .join(Owner, Owner.id == PropertyUser.user_id)
+            .join(TypeFailure, MaintenanceReport.type_failure_id == TypeFailure.id)
+            .join(Vars, MaintenanceReport.maintenance_status_id == Vars.id)
+            .filter(A.user_id == technician_id, A.report_id != None)
+            .all()
+        )
+        rep_data = [{
+            "report_id":           r.report_id,
+            "lot_id":              r.lot_id,
+            "property_id":         r.property_id,
+            "owner_document":      r.owner_document,
+            "failure_type":        r.failure_type,
+            "description_failure": r.description_failure,
+            "date":                r.date,
+            "status":              r.status,
+            "assigned_at":         r.assigned_at,
+        } for r in rep_rows]
+
+        return JSONResponse(
+            status_code=200,
+            content=jsonable_encoder({
+                "success": True,
+                "data": {
+                    "maintenances": maint_data,
+                    "reports":      rep_data
+                }
+            })
+        )
+
+    async def finalize_assignment(
+        self,
+        data: MaintenanceDetailCreate,
+        evidence_failure: UploadFile,
+        evidence_solution: UploadFile
+    ):
+        """
+        Finaliza un mantenimiento o reporte asignado:
+         - Sube evidencias a Firebase
+         - Crea registro en maintenance_detail
+         - Cambia el estado a 25 (Finalizado)
+        """
+        asgmt = self.db.get(TechnicianAssignment, data.technician_assignment_id)
+        if not asgmt:
+            raise HTTPException(status_code=404, detail="Asignación no encontrada")
+
+        # subir evidencias
+        url_fail = _upload(evidence_failure, "failures")
+        url_sol  = _upload(evidence_solution,  "solutions")
+
+        detail = MaintenanceDetail(
+            technician_assignment_id = data.technician_assignment_id,
+            fault_remarks            = data.fault_remarks,
+            evidence_failure_url     = url_fail,
+            type_failure_id          = data.type_failure_id,
+            type_maintenance         = data.type_maintenance,
+            failure_solution_id      = data.failure_solution_id,
+            solution_remarks         = data.solution_remarks,
+            evidence_solution_url    = url_sol
+        )
+        self.db.add(detail)
+
+        if asgmt.maintenance_id:
+            obj = self.db.get(Maintenance, asgmt.maintenance_id)
+        else:
+            obj = self.db.get(MaintenanceReport, asgmt.report_id)
+        obj.maintenance_status_id = 25
+
+        self.db.commit()
+        self.db.refresh(detail)
+
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": detail}))
+    
+    def get_failure_solutions(self):
+        """
+        Obtener todos los tipos de solución (failure_solution).
+        """
+        sols = self.db.query(FailureSolution).all()
+        data = [{"id": s.id, "name": s.name, "description": s.description} for s in sols]
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
+
+    def get_failure_types(self):
+        """
+        Obtener todos los tipos de fallo (type_failure).
+        """
+        types = self.db.query(TypeFailure).all()
+        data = [{"id": t.id, "name": t.name, "description": t.description} for t in types]
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
+
+    def get_report_detail(self, report_id: int):
+        """
+        Obtener detalle completo de un reporte por lote:
+        - Info base: property_id, lot_id, owner_document, owner_name,
+          report_date, failure_type, description_failure
+        - Asignación: assignment_date
+        - Finalización: finalization_date
+        - Datos del técnico y del detalle si está finalizado
+        """
+        rpt = self.db.get(MaintenanceReport, report_id)
+        if not rpt:
+            raise HTTPException(status_code=404, detail="Reporte no encontrado")
+
+        # Base del reporte
+        prop_id = (
+            self.db.query(PropertyLot.property_id)
+            .filter(PropertyLot.lot_id == rpt.lot_id)
+            .scalar()
+        )
+        owner = (
+            self.db.query(User)
+            .join(PropertyUser, PropertyUser.user_id == User.id)
+            .filter(PropertyUser.property_id == prop_id)
+            .first()
+        )
+
+        # Asignación y detalle
+        asgmt = (
+            self.db.query(TechnicianAssignment)
+            .filter(TechnicianAssignment.report_id == report_id)
+            .first()
+        )
+        assign_date = asgmt.assignment_date if asgmt else None
+
+        detail = None
+        if asgmt:
+            detail = (
+                self.db.query(MaintenanceDetail)
+                .filter(MaintenanceDetail.technician_assignment_id == asgmt.id)
+                .first()
+            )
+
+        data = {
+            "property_id":        prop_id,
+            "lot_id":             rpt.lot_id,
+            "owner_document":     owner.document_number,
+            "owner_name":         f"{owner.name} {owner.first_last_name} {owner.second_last_name}",
+            "report_date":        rpt.date,
+            "failure_type":       rpt.type_failure.name,
+            "description_failure":rpt.description_failure,
+            "assignment_date":    assign_date,
+            "finalized":          bool(detail),
+            "finalization_date":  detail.date if detail else None,
+            "technician_name":    detail.assignment.technician.name if detail else None,
+            "technician_document":detail.assignment.technician.document_number if detail else None,
+            "type_maintenance":   detail.type_maintenance if detail else None,
+            "fault_remarks":      detail.fault_remarks if detail else None,
+            "solution_name":      detail.failure_solution.name if detail else None,
+            "solution_remarks":   detail.solution_remarks if detail else None,
+            "evidence_failure_url":  detail.evidence_failure_url if detail else None,
+            "evidence_solution_url": detail.evidence_solution_url if detail else None,
+        }
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
+    
+    def get_maintenance_detail(self, maintenance_id: int):
+        """
+        Obtener detalle completo de un mantenimiento IoT:
+        - Info base: property_id, lot_id, owner_document, owner_name,
+          report_date, failure_type, description_failure
+        - Asignación: assignment_date
+        - Finalización: finalization_date
+        - Datos del técnico y del detalle si está finalizado
+        """
+        from app.maintenance.models import Maintenance, DeviceIot, MaintenanceDetail
+
+        maint = self.db.get(Maintenance, maintenance_id)
+        if not maint:
+            raise HTTPException(status_code=404, detail="Mantenimiento no encontrado")
+
+        # lote y predio
+        lot_id = (
+            self.db.query(DeviceIot.lot_id)
+            .filter(DeviceIot.id == maint.device_iot_id)
+            .scalar()
+        )
+        prop_id = (
+            self.db.query(PropertyLot.property_id)
+            .filter(PropertyLot.lot_id == lot_id)
+            .scalar()
+        )
+
+        owner = (
+            self.db.query(User)
+            .join(PropertyUser, PropertyUser.user_id == User.id)
+            .filter(PropertyUser.property_id == prop_id)
+            .first()
+        )
+
+        # asignación y detalle
+        asgmt = (
+            self.db.query(TechnicianAssignment)
+            .filter(TechnicianAssignment.maintenance_id == maintenance_id)
+            .first()
+        )
+        assign_date = asgmt.assignment_date if asgmt else None
+
+        detail = None
+        if asgmt:
+            detail = (
+                self.db.query(MaintenanceDetail)
+                .filter(MaintenanceDetail.technician_assignment_id == asgmt.id)
+                .first()
+            )
+
+        data = {
+            "property_id":         prop_id,
+            "lot_id":              lot_id,
+            "owner_document":      owner.document_number,
+            "owner_name":          f"{owner.name} {owner.first_last_name} {owner.second_last_name}",
+            "report_date":         maint.date,
+            "failure_type":        maint.type_failure.name,
+            "description_failure": maint.description_failure,
+            "assignment_date":     assign_date,
+            "finalized":           bool(detail),
+            "finalization_date":   detail.date if detail else None,
+            "technician_name":     detail.assignment.technician.name if detail else None,
+            "technician_document": detail.assignment.technician.document_number if detail else None,
+            "type_maintenance":    detail.type_maintenance if detail else None,
+            "fault_remarks":       detail.fault_remarks if detail else None,
+            "solution_name":       detail.failure_solution.name if detail else None,
+            "solution_remarks":    detail.solution_remarks if detail else None,
+            "evidence_failure_url":  detail.evidence_failure_url if detail else None,
+            "evidence_solution_url": detail.evidence_solution_url if detail else None,
+        }
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
+    
+
+    def get_maintenances_by_user(self, user_id: int):
+        """
+        Obtener todos los mantenimientos IoT (tabla maintenance)
+        cuyo predio pertenece al user_id dado.
+        """
+        # 1) validar usuario
+        if not self.db.get(User, user_id):
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+        rows = (
+            self.db.query(
+                Maintenance.id.label("maintenance_id"),
+                DeviceIot.id.label("device_iot_id"),
+                Lot.id.label("lot_id"),
+                PropertyLot.property_id.label("property_id"),
+                Maintenance.date.label("report_date"),
+                TypeFailure.name.label("failure_type"),
+                Maintenance.description_failure,
+                Vars.name.label("status"),
+            )
+            .join(DeviceIot, Maintenance.device_iot_id == DeviceIot.id)
+            .join(Lot, DeviceIot.lot_id == Lot.id)
+            .join(PropertyLot, PropertyLot.lot_id == Lot.id)
+            .join(PropertyUser, PropertyUser.property_id == PropertyLot.property_id)
+            .join(TypeFailure, Maintenance.type_failure_id == TypeFailure.id)
+            .join(Vars, Maintenance.maintenance_status_id == Vars.id)
+            .filter(PropertyUser.user_id == user_id)
+            .all()
+        )
         data = [
             {
-                "id":               u.id,
-                "name":             u.name,
-                "first_last_name":  u.first_last_name,
-                "second_last_name": u.second_last_name,
-                "document_number":  u.document_number
+                "maintenance_id":      r.maintenance_id,
+                "device_iot_id":       r.device_iot_id,
+                "lot_id":              r.lot_id,
+                "property_id":         r.property_id,
+                "report_date":         r.report_date,
+                "failure_type":        r.failure_type,
+                "description_failure": r.description_failure,
+                "status":              r.status,
             }
-            for u in users
+            for r in rows
         ]
-        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
+        return JSONResponse(
+            status_code=200,
+            content=jsonable_encoder({"success": True, "data": data})
+        )
+
+    def get_reports_by_user(self, user_id: int):
+        """
+        Obtener todos los reportes por lote (tabla maintenance_report)
+        cuyo predio pertenece al user_id dado.
+        """
+        # 1) validar usuario
+        if not self.db.get(User, user_id):
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+        rows = (
+            self.db.query(
+                MaintenanceReport.id.label("report_id"),
+                MaintenanceReport.lot_id.label("lot_id"),
+                PropertyLot.property_id.label("property_id"),
+                MaintenanceReport.date.label("report_date"),
+                TypeFailure.name.label("failure_type"),
+                MaintenanceReport.description_failure,
+                Vars.name.label("status"),
+            )
+            .join(PropertyLot, PropertyLot.lot_id == MaintenanceReport.lot_id)
+            .join(PropertyUser, PropertyUser.property_id == PropertyLot.property_id)
+            .join(TypeFailure, MaintenanceReport.type_failure_id == TypeFailure.id)
+            .join(Vars, MaintenanceReport.maintenance_status_id == Vars.id)
+            .filter(PropertyUser.user_id == user_id)
+            .all()
+        )
+        data = [
+            {
+                "report_id":           r.report_id,
+                "lot_id":              r.lot_id,
+                "property_id":         r.property_id,
+                "report_date":         r.report_date,
+                "failure_type":        r.failure_type,
+                "description_failure": r.description_failure,
+                "status":              r.status,
+            }
+            for r in rows
+        ]
+        return JSONResponse(
+            status_code=200,
+            content=jsonable_encoder({"success": True, "data": data})
+        )
+
