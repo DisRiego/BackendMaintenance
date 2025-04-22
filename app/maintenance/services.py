@@ -254,28 +254,22 @@ class MaintenanceService:
         } for u in users]
         return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
 
-    def get_assignments_for_technician(self, technician_id: int):
-        """
-        Devuelve dos listas:
-         - maintenances: asignaciones de maintenance
-         - reports:     asignaciones de maintenance_report
-        """
+    def get_assigned_maintenances_for_technician(self, technician_id: int):
         tech = self.db.get(User, technician_id)
         if not tech:
             raise HTTPException(status_code=404, detail="Técnico no encontrado")
 
         Owner = aliased(User, name="owner")
         A = aliased(TechnicianAssignment, name="asgmt")
-
-        # assignments de maintenance
-        maint_rows = (
+        rows = (
             self.db.query(
                 Maintenance.id.label("maintenance_id"),
+                DeviceIot.id.label("device_iot_id"),
+                Lot.id.label("lot_id"),
                 PropertyLot.property_id.label("property_id"),
-                Owner.document_number.label("owner_document"),
+                Maintenance.date.label("report_date"),
                 TypeFailure.name.label("failure_type"),
                 Maintenance.description_failure,
-                Maintenance.date.label("date"),
                 Vars.name.label("status"),
                 A.assignment_date.label("assigned_at"),
             )
@@ -288,30 +282,40 @@ class MaintenanceService:
             .join(Owner, Owner.id == PropertyUser.user_id)
             .join(TypeFailure, Maintenance.type_failure_id == TypeFailure.id)
             .join(Vars, Maintenance.maintenance_status_id == Vars.id)
-            .filter(A.user_id == technician_id, A.maintenance_id != None)
+            .filter(A.user_id == technician_id, A.maintenance_id.isnot(None))
             .all()
         )
-        maint_data = [{
-            "maintenance_id":      r.maintenance_id,
-            "property_id":         r.property_id,
-            "owner_document":      r.owner_document,
-            "failure_type":        r.failure_type,
-            "description_failure": r.description_failure,
-            "date":                r.date,
-            "status":              r.status,
-            "assigned_at":         r.assigned_at,
-        } for r in maint_rows]
+        data = [
+            {
+                "maintenance_id":      r.maintenance_id,
+                "device_iot_id":       r.device_iot_id,
+                "lot_id":              r.lot_id,
+                "property_id":         r.property_id,
+                "report_date":         r.report_date,
+                "failure_type":        r.failure_type,
+                "description_failure": r.description_failure,
+                "status":              r.status,
+                "assigned_at":         r.assigned_at,
+            }
+            for r in rows
+        ]
+        return JSONResponse(content=jsonable_encoder({"success": True, "data": data}), status_code=200)
 
-        # assignments de reportes
-        rep_rows = (
+    def get_assigned_reports_for_technician(self, technician_id: int):
+        tech = self.db.get(User, technician_id)
+        if not tech:
+            raise HTTPException(status_code=404, detail="Técnico no encontrado")
+
+        Owner = aliased(User, name="owner")
+        A = aliased(TechnicianAssignment, name="asgmt")
+        rows = (
             self.db.query(
                 MaintenanceReport.id.label("report_id"),
                 MaintenanceReport.lot_id.label("lot_id"),
                 PropertyLot.property_id.label("property_id"),
-                Owner.document_number.label("owner_document"),
+                MaintenanceReport.date.label("report_date"),
                 TypeFailure.name.label("failure_type"),
                 MaintenanceReport.description_failure,
-                MaintenanceReport.date.label("date"),
                 Vars.name.label("status"),
                 A.assignment_date.label("assigned_at"),
             )
@@ -322,31 +326,23 @@ class MaintenanceService:
             .join(Owner, Owner.id == PropertyUser.user_id)
             .join(TypeFailure, MaintenanceReport.type_failure_id == TypeFailure.id)
             .join(Vars, MaintenanceReport.maintenance_status_id == Vars.id)
-            .filter(A.user_id == technician_id, A.report_id != None)
+            .filter(A.user_id == technician_id, A.report_id.isnot(None))
             .all()
         )
-        rep_data = [{
-            "report_id":           r.report_id,
-            "lot_id":              r.lot_id,
-            "property_id":         r.property_id,
-            "owner_document":      r.owner_document,
-            "failure_type":        r.failure_type,
-            "description_failure": r.description_failure,
-            "date":                r.date,
-            "status":              r.status,
-            "assigned_at":         r.assigned_at,
-        } for r in rep_rows]
-
-        return JSONResponse(
-            status_code=200,
-            content=jsonable_encoder({
-                "success": True,
-                "data": {
-                    "maintenances": maint_data,
-                    "reports":      rep_data
-                }
-            })
-        )
+        data = [
+            {
+                "report_id":           r.report_id,
+                "lot_id":              r.lot_id,
+                "property_id":         r.property_id,
+                "report_date":         r.report_date,
+                "failure_type":        r.failure_type,
+                "description_failure": r.description_failure,
+                "status":              r.status,
+                "assigned_at":         r.assigned_at,
+            }
+            for r in rows
+        ]
+        return JSONResponse(content=jsonable_encoder({"success": True, "data": data}), status_code=200)
 
     async def finalize_assignment(
         self,

@@ -14,7 +14,8 @@ from app.maintenance.schemas import (
     MaintenanceDetailResponse,
     FailureSolutionSchema,
     TypeFailureSchema,
-    ReportDetailSchema
+    ReportDetailSchema,
+    MaintenanceReportAssign
     
 )
 
@@ -50,12 +51,15 @@ def get_reports(db: Session = Depends(get_db)) -> Any:
     """Obtener todos los reportes por lote (tabla maintenance_report)."""
     return MaintenanceService(db).get_reports()
 
-@router.post("/reports", response_model=MaintenanceReportResponse)
+@router.post(
+    "/reports",
+    response_model=MaintenanceReportResponse
+)
 def create_report(
     report: MaintenanceReportCreate,
     db:     Session = Depends(get_db)
 ) -> Any:
-    """Crear un nuevo reporte por lote (tabla maintenance_report)."""
+    """Crear un nuevo reporte por lote."""
     return MaintenanceService(db).create_report(report)
 
 @router.post(
@@ -64,30 +68,33 @@ def create_report(
 )
 def assign_report(
     report_id: int,
-    user_id:   int = Body(..., embed=True, description="ID del técnico a asignar"),
-    db:        Session = Depends(get_db)
+    assign:    MaintenanceReportAssign = Body(...),
+    db:        Session                = Depends(get_db)
 ) -> Any:
-    """Asignar técnico a un reporte por lote existente."""
-    return MaintenanceService(db).assign_report_technician(report_id, user_id)
+    """
+    Asignar técnico a un reporte por lote,
+    usando la fecha de asignación enviada en el body.
+    """
+    return MaintenanceService(db).assign_report_technician(report_id, assign)
 
 @router.get("/technicians/permission", response_model=Dict)
 def get_technicians(db: Session = Depends(get_db)) -> Any:
     """Obtener todos los usuarios con permiso 80 (técnicos)."""
     return MaintenanceService(db).get_users_with_permission()
 
-@router.get(
-    "/assigned/{technician_id}",
-    response_model=Dict
-)
-def get_all_assigned(
+@router.get("/assigned/{technician_id}/maintenances", response_model=Dict[str, Any])
+def get_assigned_maintenances(
     technician_id: int,
     db:             Session = Depends(get_db)
 ) -> Any:
-    """
-    Obtener todas las asignaciones (maintenance + maintenance_report)
-    para un técnico dado.
-    """
-    return MaintenanceService(db).get_assignments_for_technician(technician_id)
+    return MaintenanceService(db).get_assigned_maintenances_for_technician(technician_id)
+
+@router.get("/assigned/{technician_id}/reports", response_model=Dict[str, Any])
+def get_assigned_reports(
+    technician_id: int,
+    db:             Session = Depends(get_db)
+) -> Any:
+    return MaintenanceService(db).get_assigned_reports_for_technician(technician_id)
 
 @router.post(
     "/finalize",
