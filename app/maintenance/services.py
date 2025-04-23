@@ -20,6 +20,7 @@ from app.maintenance.models import (
     PropertyUser,
     TypeFailure,
     Vars,
+    Property,
     bucket,
     user_role_table,
     role_permission_table,
@@ -140,8 +141,10 @@ class MaintenanceService:
 
     def get_reports(self):
         """
-        Obtener todos los reportes por lote (tabla maintenance_report), incluyendo
-        property_id y owner_document.
+        Obtener todos los reportes por lote, incluyendo:
+        - property_id + property_name
+        - lot_id      + lot_name
+        - owner_document, tipo de fallo, fecha y estado
         """
         try:
             Owner = aliased(User, name="owner")
@@ -149,7 +152,9 @@ class MaintenanceService:
                 self.db.query(
                     MaintenanceReport.id.label("id"),
                     PropertyLot.property_id.label("property_id"),
+                    Property.name.label("property_name"),        # 🆕
                     MaintenanceReport.lot_id.label("lot_id"),
+                    Lot.name.label("lot_name"),                  # 🆕
                     Owner.document_number.label("owner_document"),
                     TypeFailure.name.label("failure_type"),
                     MaintenanceReport.description_failure,
@@ -157,21 +162,25 @@ class MaintenanceService:
                     Vars.name.label("status"),
                 )
                 .join(PropertyLot, PropertyLot.lot_id == MaintenanceReport.lot_id)
+                .join(Property,    Property.id == PropertyLot.property_id)   # 🆕
+                .join(Lot,         Lot.id == MaintenanceReport.lot_id)       # 🆕
                 .join(PropertyUser, PropertyUser.property_id == PropertyLot.property_id)
-                .join(Owner, Owner.id == PropertyUser.user_id)
-                .join(TypeFailure, MaintenanceReport.type_failure_id == TypeFailure.id)
-                .join(Vars, MaintenanceReport.maintenance_status_id == Vars.id)
+                .join(Owner,        Owner.id == PropertyUser.user_id)
+                .join(TypeFailure,  MaintenanceReport.type_failure_id == TypeFailure.id)
+                .join(Vars,         MaintenanceReport.maintenance_status_id == Vars.id)
                 .all()
             )
             data = [{
-                "id": r.id,
-                "property_id": r.property_id,
-                "lot_id": r.lot_id,
-                "owner_document": r.owner_document,
-                "failure_type": r.failure_type,
-                "description_failure": r.description_failure,
-                "date": r.date,
-                "status": r.status,
+                "id":                   r.id,
+                "property_id":          r.property_id,
+                "property_name":        r.property_name,         # 🆕
+                "lot_id":               r.lot_id,
+                "lot_name":             r.lot_name,              # 🆕
+                "owner_document":       r.owner_document,
+                "failure_type":         r.failure_type,
+                "description_failure":  r.description_failure,
+                "date":                 r.date,
+                "status":               r.status,
             } for r in rows]
             return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
         except Exception as e:
@@ -266,7 +275,9 @@ class MaintenanceService:
                 Maintenance.id.label("maintenance_id"),
                 DeviceIot.id.label("device_iot_id"),
                 Lot.id.label("lot_id"),
+                Lot.name.label("lot_name"),                     
                 PropertyLot.property_id.label("property_id"),
+                Property.name.label("property_name"),            
                 Maintenance.date.label("report_date"),
                 TypeFailure.name.label("failure_type"),
                 Maintenance.description_failure,
@@ -274,31 +285,31 @@ class MaintenanceService:
                 A.assignment_date.label("assigned_at"),
             )
             .select_from(A)
-            .join(Maintenance, A.maintenance_id == Maintenance.id)
-            .join(DeviceIot, Maintenance.device_iot_id == DeviceIot.id)
-            .join(Lot, DeviceIot.lot_id == Lot.id)
-            .join(PropertyLot, PropertyLot.lot_id == Lot.id)
-            .join(PropertyUser, PropertyUser.property_id == PropertyLot.property_id)
-            .join(Owner, Owner.id == PropertyUser.user_id)
-            .join(TypeFailure, Maintenance.type_failure_id == TypeFailure.id)
-            .join(Vars, Maintenance.maintenance_status_id == Vars.id)
+            .join(Maintenance,   A.maintenance_id == Maintenance.id)
+            .join(DeviceIot,     Maintenance.device_iot_id == DeviceIot.id)
+            .join(Lot,           DeviceIot.lot_id == Lot.id)
+            .join(PropertyLot,   PropertyLot.lot_id == Lot.id)
+            .join(Property,      Property.id == PropertyLot.property_id)     
+            .join(PropertyUser,  PropertyUser.property_id == PropertyLot.property_id)
+            .join(Owner,         Owner.id == PropertyUser.user_id)
+            .join(TypeFailure,   Maintenance.type_failure_id == TypeFailure.id)
+            .join(Vars,          Maintenance.maintenance_status_id == Vars.id)
             .filter(A.user_id == technician_id, A.maintenance_id.isnot(None))
             .all()
         )
-        data = [
-            {
-                "maintenance_id":      r.maintenance_id,
-                "device_iot_id":       r.device_iot_id,
-                "lot_id":              r.lot_id,
-                "property_id":         r.property_id,
-                "report_date":         r.report_date,
-                "failure_type":        r.failure_type,
-                "description_failure": r.description_failure,
-                "status":              r.status,
-                "assigned_at":         r.assigned_at,
-            }
-            for r in rows
-        ]
+        data = [{
+            "maintenance_id":      r.maintenance_id,
+            "device_iot_id":       r.device_iot_id,
+            "lot_id":              r.lot_id,
+            "lot_name":            r.lot_name,                 
+            "property_id":         r.property_id,
+            "property_name":       r.property_name,           
+            "report_date":         r.report_date,
+            "failure_type":        r.failure_type,
+            "description_failure": r.description_failure,
+            "status":              r.status,
+            "assigned_at":         r.assigned_at,
+        } for r in rows]
         return JSONResponse(content=jsonable_encoder({"success": True, "data": data}), status_code=200)
 
     def get_assigned_reports_for_technician(self, technician_id: int):
@@ -312,7 +323,9 @@ class MaintenanceService:
             self.db.query(
                 MaintenanceReport.id.label("report_id"),
                 MaintenanceReport.lot_id.label("lot_id"),
+                Lot.name.label("lot_name"),                      
                 PropertyLot.property_id.label("property_id"),
+                Property.name.label("property_name"),            
                 MaintenanceReport.date.label("report_date"),
                 TypeFailure.name.label("failure_type"),
                 MaintenanceReport.description_failure,
@@ -321,27 +334,28 @@ class MaintenanceService:
             )
             .select_from(A)
             .join(MaintenanceReport, A.report_id == MaintenanceReport.id)
-            .join(PropertyLot, PropertyLot.lot_id == MaintenanceReport.lot_id)
-            .join(PropertyUser, PropertyUser.property_id == PropertyLot.property_id)
-            .join(Owner, Owner.id == PropertyUser.user_id)
-            .join(TypeFailure, MaintenanceReport.type_failure_id == TypeFailure.id)
-            .join(Vars, MaintenanceReport.maintenance_status_id == Vars.id)
+            .join(Lot,              Lot.id == MaintenanceReport.lot_id)     
+            .join(PropertyLot,      PropertyLot.lot_id == MaintenanceReport.lot_id)
+            .join(Property,         Property.id == PropertyLot.property_id)  
+            .join(PropertyUser,     PropertyUser.property_id == PropertyLot.property_id)
+            .join(Owner,            Owner.id == PropertyUser.user_id)
+            .join(TypeFailure,      MaintenanceReport.type_failure_id == TypeFailure.id)
+            .join(Vars,             MaintenanceReport.maintenance_status_id == Vars.id)
             .filter(A.user_id == technician_id, A.report_id.isnot(None))
             .all()
         )
-        data = [
-            {
-                "report_id":           r.report_id,
-                "lot_id":              r.lot_id,
-                "property_id":         r.property_id,
-                "report_date":         r.report_date,
-                "failure_type":        r.failure_type,
-                "description_failure": r.description_failure,
-                "status":              r.status,
-                "assigned_at":         r.assigned_at,
-            }
-            for r in rows
-        ]
+        data = [{
+            "report_id":           r.report_id,
+            "lot_id":              r.lot_id,
+            "lot_name":            r.lot_name,                 
+            "property_id":         r.property_id,
+            "property_name":       r.property_name,           
+            "report_date":         r.report_date,
+            "failure_type":        r.failure_type,
+            "description_failure": r.description_failure,
+            "status":              r.status,
+            "assigned_at":         r.assigned_at,
+        } for r in rows]
         return JSONResponse(content=jsonable_encoder({"success": True, "data": data}), status_code=200)
 
     async def finalize_assignment(
