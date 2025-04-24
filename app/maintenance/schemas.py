@@ -115,22 +115,26 @@ class TypeFailureSchema(BaseModel):
         orm_mode = True
 
 # --- DETALLE COMPLETO DE REPORTE POR LOTE ---
-
 class ReportDetailSchema(BaseModel):
     # Info base
     property_id:         int       = Field(..., description="ID del predio")
+    property_name:       str       = Field(..., description="Nombre del predio")       # 🆕
     lot_id:              int       = Field(..., description="ID del lote")
+    lot_name:            str       = Field(..., description="Nombre del lote")         # 🆕
     owner_document:      str       = Field(..., description="Documento del propietario")
     owner_name:          str       = Field(..., description="Nombre completo del propietario")
     report_date:         datetime  = Field(..., description="Fecha del reporte")
     failure_type:        str       = Field(..., description="Tipo de fallo")
     description_failure: Optional[str] = Field(None, description="Descripción del fallo")
 
+    # Opcional: exponer también el estado actual
+    status:              str       = Field(..., description="Estado del mantenimiento o reporte")  # 🆕
+
     # Asignación
     assignment_date:     Optional[datetime] = Field(None, description="Fecha de asignación")
 
     # Finalización
-    finalized:           bool      = Field(..., description="Indica si el reporte está finalizado")
+    finalized:           bool      = Field(..., description="Indica si está finalizado")
     finalization_date:   Optional[datetime] = Field(None, description="Fecha de finalización")
 
     # Detalle técnico (si finalizado)
@@ -145,3 +149,17 @@ class ReportDetailSchema(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+
+class MaintenanceReportUpdate(BaseModel):
+    type_failure_id:      Optional[int]
+    description_failure:  Optional[str]
+    maintenance_status_id:Optional[int]
+
+class MaintenanceDetailUpdate(BaseModel):
+    fault_remarks:       Optional[str]
+    type_failure_id:     Optional[int]
+    type_maintenance:    Optional[str]
+    failure_solution_id: Optional[int]
+    solution_remarks:    Optional[str]

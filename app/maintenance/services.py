@@ -152,9 +152,9 @@ class MaintenanceService:
                 self.db.query(
                     MaintenanceReport.id.label("id"),
                     PropertyLot.property_id.label("property_id"),
-                    Property.name.label("property_name"),        # 🆕
+                    Property.name.label("property_name"),        
                     MaintenanceReport.lot_id.label("lot_id"),
-                    Lot.name.label("lot_name"),                  # 🆕
+                    Lot.name.label("lot_name"),                  
                     Owner.document_number.label("owner_document"),
                     TypeFailure.name.label("failure_type"),
                     MaintenanceReport.description_failure,
@@ -162,8 +162,8 @@ class MaintenanceService:
                     Vars.name.label("status"),
                 )
                 .join(PropertyLot, PropertyLot.lot_id == MaintenanceReport.lot_id)
-                .join(Property,    Property.id == PropertyLot.property_id)   # 🆕
-                .join(Lot,         Lot.id == MaintenanceReport.lot_id)       # 🆕
+                .join(Property,    Property.id == PropertyLot.property_id)   
+                .join(Lot,         Lot.id == MaintenanceReport.lot_id)       
                 .join(PropertyUser, PropertyUser.property_id == PropertyLot.property_id)
                 .join(Owner,        Owner.id == PropertyUser.user_id)
                 .join(TypeFailure,  MaintenanceReport.type_failure_id == TypeFailure.id)
@@ -173,9 +173,9 @@ class MaintenanceService:
             data = [{
                 "id":                   r.id,
                 "property_id":          r.property_id,
-                "property_name":        r.property_name,         # 🆕
+                "property_name":        r.property_name,         
                 "lot_id":               r.lot_id,
-                "lot_name":             r.lot_name,              # 🆕
+                "lot_name":             r.lot_name,              
                 "owner_document":       r.owner_document,
                 "failure_type":         r.failure_type,
                 "description_failure":  r.description_failure,
@@ -419,23 +419,20 @@ class MaintenanceService:
 
     def get_report_detail(self, report_id: int):
         """
-        Obtener detalle completo de un reporte por lote:
-        - Info base: property_id, lot_id, owner_document, owner_name,
-          report_date, failure_type, description_failure
-        - Asignación: assignment_date
-        - Finalización: finalization_date
-        - Datos del técnico y del detalle si está finalizado
+        Detalle completo de un reporte por lote, ahora incluye:
+        - NOMBRE de estado, predio y lote
         """
         rpt = self.db.get(MaintenanceReport, report_id)
         if not rpt:
             raise HTTPException(status_code=404, detail="Reporte no encontrado")
 
-        # Base del reporte
+        # Predio y dueño
         prop_id = (
             self.db.query(PropertyLot.property_id)
             .filter(PropertyLot.lot_id == rpt.lot_id)
             .scalar()
         )
+        prop = self.db.get(Property, prop_id)                       
         owner = (
             self.db.query(User)
             .join(PropertyUser, PropertyUser.user_id == User.id)
@@ -443,39 +440,42 @@ class MaintenanceService:
             .first()
         )
 
-        # Asignación y detalle
+        # Asignación y detalle (si existen)
         asgmt = (
             self.db.query(TechnicianAssignment)
             .filter(TechnicianAssignment.report_id == report_id)
             .first()
         )
-        assign_date = asgmt.assignment_date if asgmt else None
-
-        detail = None
-        if asgmt:
-            detail = (
-                self.db.query(MaintenanceDetail)
-                .filter(MaintenanceDetail.technician_assignment_id == asgmt.id)
-                .first()
-            )
+        detail = (
+            self.db.query(MaintenanceDetail)
+            .filter(MaintenanceDetail.technician_assignment_id == asgmt.id)
+            .first()
+        ) if asgmt else None
 
         data = {
-            "property_id":        prop_id,
-            "lot_id":             rpt.lot_id,
-            "owner_document":     owner.document_number,
-            "owner_name":         f"{owner.name} {owner.first_last_name} {owner.second_last_name}",
-            "report_date":        rpt.date,
-            "failure_type":       rpt.type_failure.name,
-            "description_failure":rpt.description_failure,
-            "assignment_date":    assign_date,
-            "finalized":          bool(detail),
-            "finalization_date":  detail.date if detail else None,
-            "technician_name":    detail.assignment.technician.name if detail else None,
-            "technician_document":detail.assignment.technician.document_number if detail else None,
-            "type_maintenance":   detail.type_maintenance if detail else None,
-            "fault_remarks":      detail.fault_remarks if detail else None,
-            "solution_name":      detail.failure_solution.name if detail else None,
-            "solution_remarks":   detail.solution_remarks if detail else None,
+            
+            "property_id":    prop_id,
+            "property_name":  prop.name,
+            "lot_id":         rpt.lot_id,
+            "lot_name":       rpt.lot.name,
+            "status":         rpt.status.name,
+            
+            "owner_document":      owner.document_number,
+            "owner_name":          f"{owner.name} {owner.first_last_name} {owner.second_last_name}",
+            "report_date":         rpt.date,
+            "failure_type":        rpt.type_failure.name,
+            "description_failure": rpt.description_failure,
+            
+            "assignment_date":   asgmt.assignment_date if asgmt else None,
+            "finalized":         bool(detail),
+            "finalization_date": detail.date if detail else None,
+            
+            "technician_name":     detail.assignment.technician.name if detail else None,
+            "technician_document": detail.assignment.technician.document_number if detail else None,
+            "type_maintenance":    detail.type_maintenance if detail else None,
+            "fault_remarks":       detail.fault_remarks if detail else None,
+            "solution_name":       detail.failure_solution.name if detail else None,
+            "solution_remarks":    detail.solution_remarks if detail else None,
             "evidence_failure_url":  detail.evidence_failure_url if detail else None,
             "evidence_solution_url": detail.evidence_solution_url if detail else None,
         }
@@ -483,62 +483,52 @@ class MaintenanceService:
     
     def get_maintenance_detail(self, maintenance_id: int):
         """
-        Obtener detalle completo de un mantenimiento IoT:
-        - Info base: property_id, lot_id, owner_document, owner_name,
-          report_date, failure_type, description_failure
-        - Asignación: assignment_date
-        - Finalización: finalization_date
-        - Datos del técnico y del detalle si está finalizado
+        Obtener detalle completo de un mantenimiento IoT,
+        incluyendo nombre de predio, nombre de lote y estado.
         """
-        from app.maintenance.models import Maintenance, DeviceIot, MaintenanceDetail
-
         maint = self.db.get(Maintenance, maintenance_id)
         if not maint:
             raise HTTPException(status_code=404, detail="Mantenimiento no encontrado")
 
         # lote y predio
-        lot_id = (
-            self.db.query(DeviceIot.lot_id)
-            .filter(DeviceIot.id == maint.device_iot_id)
-            .scalar()
-        )
-        prop_id = (
-            self.db.query(PropertyLot.property_id)
-            .filter(PropertyLot.lot_id == lot_id)
-            .scalar()
-        )
+        lot_id = self.db.query(DeviceIot.lot_id) \
+                        .filter(DeviceIot.id == maint.device_iot_id) \
+                        .scalar()
+        prop_id = self.db.query(PropertyLot.property_id) \
+                         .filter(PropertyLot.lot_id == lot_id) \
+                         .scalar()
 
-        owner = (
-            self.db.query(User)
-            .join(PropertyUser, PropertyUser.user_id == User.id)
-            .filter(PropertyUser.property_id == prop_id)
-            .first()
-        )
+        prop = self.db.get(Property, prop_id)
+        lot  = self.db.get(Lot, lot_id)
+
+        owner = self.db.query(User) \
+                       .join(PropertyUser, PropertyUser.user_id == User.id) \
+                       .filter(PropertyUser.property_id == prop_id) \
+                       .first()
 
         # asignación y detalle
-        asgmt = (
-            self.db.query(TechnicianAssignment)
-            .filter(TechnicianAssignment.maintenance_id == maintenance_id)
-            .first()
-        )
+        asgmt = self.db.query(TechnicianAssignment) \
+                      .filter(TechnicianAssignment.maintenance_id == maintenance_id) \
+                      .first()
         assign_date = asgmt.assignment_date if asgmt else None
 
         detail = None
         if asgmt:
-            detail = (
-                self.db.query(MaintenanceDetail)
-                .filter(MaintenanceDetail.technician_assignment_id == asgmt.id)
-                .first()
-            )
+            detail = self.db.query(MaintenanceDetail) \
+                            .filter(MaintenanceDetail.technician_assignment_id == asgmt.id) \
+                            .first()
 
         data = {
             "property_id":         prop_id,
+            "property_name":       prop.name,                
             "lot_id":              lot_id,
+            "lot_name":            lot.name,                
             "owner_document":      owner.document_number,
             "owner_name":          f"{owner.name} {owner.first_last_name} {owner.second_last_name}",
             "report_date":         maint.date,
             "failure_type":        maint.type_failure.name,
             "description_failure": maint.description_failure,
+            "status":              maint.status.name,      
             "assignment_date":     assign_date,
             "finalized":           bool(detail),
             "finalization_date":   detail.date if detail else None,
@@ -556,10 +546,9 @@ class MaintenanceService:
 
     def get_maintenances_by_user(self, user_id: int):
         """
-        Obtener todos los mantenimientos IoT (tabla maintenance)
-        cuyo predio pertenece al user_id dado.
+        Obtener todos los mantenimientos IoT de un usuario,
+        incluyendo nombre de predio, nombre de lote y estado.
         """
-        # 1) validar usuario
         if not self.db.get(User, user_id):
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
@@ -568,15 +557,18 @@ class MaintenanceService:
                 Maintenance.id.label("maintenance_id"),
                 DeviceIot.id.label("device_iot_id"),
                 Lot.id.label("lot_id"),
+                Lot.name.label("lot_name"),                    
                 PropertyLot.property_id.label("property_id"),
+                Property.name.label("property_name"),          
                 Maintenance.date.label("report_date"),
                 TypeFailure.name.label("failure_type"),
                 Maintenance.description_failure,
-                Vars.name.label("status"),
+                Vars.name.label("status"),                     
             )
             .join(DeviceIot, Maintenance.device_iot_id == DeviceIot.id)
             .join(Lot, DeviceIot.lot_id == Lot.id)
             .join(PropertyLot, PropertyLot.lot_id == Lot.id)
+            .join(Property, Property.id == PropertyLot.property_id)
             .join(PropertyUser, PropertyUser.property_id == PropertyLot.property_id)
             .join(TypeFailure, Maintenance.type_failure_id == TypeFailure.id)
             .join(Vars, Maintenance.maintenance_status_id == Vars.id)
@@ -588,11 +580,13 @@ class MaintenanceService:
                 "maintenance_id":      r.maintenance_id,
                 "device_iot_id":       r.device_iot_id,
                 "lot_id":              r.lot_id,
+                "lot_name":            r.lot_name,              
                 "property_id":         r.property_id,
+                "property_name":       r.property_name,         
                 "report_date":         r.report_date,
                 "failure_type":        r.failure_type,
                 "description_failure": r.description_failure,
-                "status":              r.status,
+                "status":              r.status,                
             }
             for r in rows
         ]
@@ -600,13 +594,12 @@ class MaintenanceService:
             status_code=200,
             content=jsonable_encoder({"success": True, "data": data})
         )
-
+    
     def get_reports_by_user(self, user_id: int):
         """
-        Obtener todos los reportes por lote (tabla maintenance_report)
-        cuyo predio pertenece al user_id dado.
+        Obtener todos los reportes por lote de un usuario,
+        incluyendo nombre de predio, nombre de lote y estado.
         """
-        # 1) validar usuario
         if not self.db.get(User, user_id):
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
@@ -614,13 +607,17 @@ class MaintenanceService:
             self.db.query(
                 MaintenanceReport.id.label("report_id"),
                 MaintenanceReport.lot_id.label("lot_id"),
+                Lot.name.label("lot_name"),                     
                 PropertyLot.property_id.label("property_id"),
+                Property.name.label("property_name"),           
                 MaintenanceReport.date.label("report_date"),
                 TypeFailure.name.label("failure_type"),
                 MaintenanceReport.description_failure,
-                Vars.name.label("status"),
+                Vars.name.label("status"),                      
             )
+            .join(Lot, Lot.id == MaintenanceReport.lot_id)
             .join(PropertyLot, PropertyLot.lot_id == MaintenanceReport.lot_id)
+            .join(Property, Property.id == PropertyLot.property_id)
             .join(PropertyUser, PropertyUser.property_id == PropertyLot.property_id)
             .join(TypeFailure, MaintenanceReport.type_failure_id == TypeFailure.id)
             .join(Vars, MaintenanceReport.maintenance_status_id == Vars.id)
@@ -631,11 +628,13 @@ class MaintenanceService:
             {
                 "report_id":           r.report_id,
                 "lot_id":              r.lot_id,
+                "lot_name":            r.lot_name,              
                 "property_id":         r.property_id,
+                "property_name":       r.property_name,         
                 "report_date":         r.report_date,
                 "failure_type":        r.failure_type,
                 "description_failure": r.description_failure,
-                "status":              r.status,
+                "status":              r.status,                
             }
             for r in rows
         ]
@@ -644,3 +643,49 @@ class MaintenanceService:
             content=jsonable_encoder({"success": True, "data": data})
         )
 
+    def update_report(self, report_id: int, data):
+        """
+        Edición parcial del reporte (maintenance_report).
+        Acepta cualquiera de los campos del body.
+        """
+        rpt = self.db.get(MaintenanceReport, report_id)
+        if not rpt:
+            raise HTTPException(status_code=404, detail="Reporte no encontrado")
+
+        payload = data.dict(exclude_unset=True)
+        for k, v in payload.items():
+            setattr(rpt, k, v)
+
+        self.db.commit()
+        self.db.refresh(rpt)
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": rpt}))
+
+
+    async def update_finalization(
+        self,
+        detail_id: int,
+        data,
+        evidence_failure:  UploadFile | None = None,
+        evidence_solution: UploadFile | None = None,
+    ):
+        """
+        Modifica un registro de maintenance_detail.
+        Evidencias nuevas (si vienen) se suben y reemplazan URLs.
+        """
+        detail = self.db.get(MaintenanceDetail, detail_id)
+        if not detail:
+            raise HTTPException(status_code=404, detail="Detalle no encontrado")
+
+        payload = data.dict(exclude_unset=True)
+        for k, v in payload.items():
+            setattr(detail, k, v)
+
+        # evidencias opcionales
+        if evidence_failure:
+            detail.evidence_failure_url = _upload(evidence_failure, "failures")
+        if evidence_solution:
+            detail.evidence_solution_url = _upload(evidence_solution, "solutions")
+
+        self.db.commit()
+        self.db.refresh(detail)
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": detail}))

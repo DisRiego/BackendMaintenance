@@ -15,7 +15,9 @@ from app.maintenance.schemas import (
     FailureSolutionSchema,
     TypeFailureSchema,
     ReportDetailSchema,
-    MaintenanceReportAssign
+    MaintenanceReportAssign,
+    MaintenanceDetailUpdate,
+    MaintenanceReportUpdate
     
 )
 
@@ -199,3 +201,36 @@ def get_user_reports(
     Obtiene todos los reportes por lote creados en predios del usuario.
     """
     return MaintenanceService(db).get_reports_by_user(user_id)
+
+
+
+@router.put("/reports/{report_id}", response_model=Dict)
+def edit_report(
+    report_id: int,
+    body:      MaintenanceReportUpdate,
+    db:        Session = Depends(get_db)
+) -> Any:
+    return MaintenanceService(db).update_report(report_id, body)
+
+
+@router.put(
+    "/finalize/{detail_id}",
+    response_model=Dict
+)
+async def edit_finalization(
+    detail_id:           int,
+    body:                MaintenanceDetailUpdate = Depends(),
+    evidence_failure:    UploadFile | None        = File(None),
+    evidence_solution:   UploadFile | None        = File(None),
+    db:                  Session                 = Depends(get_db)
+) -> Any:
+    """
+    Permite modificar un registro de maintenance_detail.
+    Las evidencias son opcionales; si se envían se reemplazan.
+    """
+    return await MaintenanceService(db).update_finalization(
+        detail_id,
+        body,
+        evidence_failure,
+        evidence_solution
+    )
