@@ -459,7 +459,7 @@ class MaintenanceService:
             "lot_id":         rpt.lot_id,
             "lot_name":       rpt.lot.name,
             "status":         rpt.status.name,
-            
+            "status_id":      rpt.maintenance_status_id,
             "owner_document":      owner.document_number,
             "owner_name":          f"{owner.name} {owner.first_last_name} {owner.second_last_name}",
             "report_date":         rpt.date,
@@ -528,7 +528,8 @@ class MaintenanceService:
             "report_date":         maint.date,
             "failure_type":        maint.type_failure.name,
             "description_failure": maint.description_failure,
-            "status":              maint.status.name,      
+            "status":              maint.status.name,
+            "status_id":      maint.maintenance_status_id,      
             "assignment_date":     assign_date,
             "finalized":           bool(detail),
             "finalization_date":   detail.date if detail else None,
@@ -561,6 +562,7 @@ class MaintenanceService:
                 PropertyLot.property_id.label("property_id"),
                 Property.name.label("property_name"),          
                 Maintenance.date.label("report_date"),
+                Maintenance.maintenance_status_id.label("status_id"),
                 TypeFailure.name.label("failure_type"),
                 Maintenance.description_failure,
                 Vars.name.label("status"),                     
@@ -586,7 +588,8 @@ class MaintenanceService:
                 "report_date":         r.report_date,
                 "failure_type":        r.failure_type,
                 "description_failure": r.description_failure,
-                "status":              r.status,                
+                "status":              r.status,
+                "status_id":           r.status_id                
             }
             for r in rows
         ]
@@ -613,7 +616,8 @@ class MaintenanceService:
                 MaintenanceReport.date.label("report_date"),
                 TypeFailure.name.label("failure_type"),
                 MaintenanceReport.description_failure,
-                Vars.name.label("status"),                      
+                Vars.name.label("status"),
+                MaintenanceReport.maintenance_status_id.label("status_id")                      
             )
             .join(Lot, Lot.id == MaintenanceReport.lot_id)
             .join(PropertyLot, PropertyLot.lot_id == MaintenanceReport.lot_id)
@@ -634,7 +638,9 @@ class MaintenanceService:
                 "report_date":         r.report_date,
                 "failure_type":        r.failure_type,
                 "description_failure": r.description_failure,
-                "status":              r.status,                
+                "status":              r.status,
+                "status_id":           r.status_id     
+                           
             }
             for r in rows
         ]

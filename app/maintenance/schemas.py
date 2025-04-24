@@ -118,17 +118,18 @@ class TypeFailureSchema(BaseModel):
 class ReportDetailSchema(BaseModel):
     # Info base
     property_id:         int       = Field(..., description="ID del predio")
-    property_name:       str       = Field(..., description="Nombre del predio")       # 🆕
+    property_name:       str       = Field(..., description="Nombre del predio")       
     lot_id:              int       = Field(..., description="ID del lote")
-    lot_name:            str       = Field(..., description="Nombre del lote")         # 🆕
+    lot_name:            str       = Field(..., description="Nombre del lote")         
     owner_document:      str       = Field(..., description="Documento del propietario")
     owner_name:          str       = Field(..., description="Nombre completo del propietario")
     report_date:         datetime  = Field(..., description="Fecha del reporte")
     failure_type:        str       = Field(..., description="Tipo de fallo")
     description_failure: Optional[str] = Field(None, description="Descripción del fallo")
+    status_id:           int       = Field(..., description="ID del estado actual")
 
     # Opcional: exponer también el estado actual
-    status:              str       = Field(..., description="Estado del mantenimiento o reporte")  # 🆕
+    status:              str       = Field(..., description="Estado del mantenimiento o reporte")  
 
     # Asignación
     assignment_date:     Optional[datetime] = Field(None, description="Fecha de asignación")
