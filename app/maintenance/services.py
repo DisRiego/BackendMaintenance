@@ -272,6 +272,7 @@ class MaintenanceService:
         A = aliased(TechnicianAssignment, name="asgmt")
         rows = (
             self.db.query(
+                A.id.label("technician_assignment_id"),
                 Maintenance.id.label("maintenance_id"),
                 DeviceIot.id.label("device_iot_id"),
                 Lot.id.label("lot_id"),
@@ -298,6 +299,7 @@ class MaintenanceService:
             .all()
         )
         data = [{
+            "technician_assignment_id": r.technician_assignment_id,
             "maintenance_id":      r.maintenance_id,
             "device_iot_id":       r.device_iot_id,
             "lot_id":              r.lot_id,
@@ -321,6 +323,7 @@ class MaintenanceService:
         A = aliased(TechnicianAssignment, name="asgmt")
         rows = (
             self.db.query(
+                A.id.label("technician_assignment_id"),
                 MaintenanceReport.id.label("report_id"),
                 MaintenanceReport.lot_id.label("lot_id"),
                 Lot.name.label("lot_name"),                      
@@ -345,6 +348,7 @@ class MaintenanceService:
             .all()
         )
         data = [{
+            "technician_assignment_id": r.technician_assignment_id,
             "report_id":           r.report_id,
             "lot_id":              r.lot_id,
             "lot_name":            r.lot_name,                 
