@@ -64,20 +64,9 @@ def create_report(
     """Crear un nuevo reporte por lote."""
     return MaintenanceService(db).create_report(report)
 
-@router.post(
-    "/reports/{report_id}/assign",
-    response_model=Dict
-)
-def assign_report(
-    report_id: int,
-    assign:    MaintenanceReportAssign = Body(...),
-    db:        Session                = Depends(get_db)
-) -> Any:
-    """
-    Asignar técnico a un reporte por lote,
-    usando la fecha de asignación enviada en el body.
-    """
-    return MaintenanceService(db).assign_report_technician(report_id, assign)
+@router.post("/reports/{report_id}/assign", response_model=Dict)
+def assign_report(report_id: int, assign: MaintenanceReportAssign = Body(...), db: Session = Depends(get_db)) -> Any:
+    return MaintenanceService(db).assign_report_technician(report_id, assign.user_id)
 
 @router.get("/technicians/permission", response_model=Dict)
 def get_technicians(db: Session = Depends(get_db)) -> Any:
