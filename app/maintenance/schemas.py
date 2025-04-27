@@ -67,7 +67,8 @@ class MaintenanceReportResponse(BaseModel):
     description_failure: Optional[str] = Field(None, description="Descripción del fallo")
     date:                datetime  = Field(..., description="Fecha del reporte")
     status:              str       = Field(..., description="Estado (texto)")
-
+    technician_id:       Optional[int] = Field(None, description="ID del técnico asignado")
+    technician_name:     Optional[str] = Field(None, description="Nombre completo del técnico asignado")
     class Config:
         orm_mode = True
 

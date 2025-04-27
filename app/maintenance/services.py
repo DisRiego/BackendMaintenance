@@ -148,6 +148,8 @@ class MaintenanceService:
         """
         try:
             Owner = aliased(User, name="owner")
+            TA    = aliased(TechnicianAssignment, name="ta")
+            Tech  = aliased(User, name="tech")
             rows = (
                 self.db.query(
                     MaintenanceReport.id.label("id"),
@@ -160,6 +162,11 @@ class MaintenanceService:
                     MaintenanceReport.description_failure,
                     MaintenanceReport.date,
                     Vars.name.label("status"),
+                    TA.user_id.label("technician_id"),          
+                    Tech.name.label("tech_name"),
+                    Tech.first_last_name.label("tech_last1"),
+                    Tech.second_last_name.label("tech_last2"),
+
                 )
                 .join(PropertyLot, PropertyLot.lot_id == MaintenanceReport.lot_id)
                 .join(Property,    Property.id == PropertyLot.property_id)   
@@ -181,6 +188,12 @@ class MaintenanceService:
                 "description_failure":  r.description_failure,
                 "date":                 r.date,
                 "status":               r.status,
+                "technician_id":        r.technician_id,          
+                "technician_name":     (
+                f"{r.tech_name} {r.tech_last1} {r.tech_last2}"
+                if r.tech_name else None
+                ),
+         
             } for r in rows]
             return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
         except Exception as e:
