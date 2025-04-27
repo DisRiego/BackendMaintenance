@@ -145,57 +145,64 @@ class MaintenanceService:
         - property_id + property_name
         - lot_id      + lot_name
         - owner_document, tipo de fallo, fecha y estado
+        - technician_id y technician_name (si está asignado)
         """
         try:
             Owner = aliased(User, name="owner")
             TA    = aliased(TechnicianAssignment, name="ta")
             Tech  = aliased(User, name="tech")
+
             rows = (
                 self.db.query(
                     MaintenanceReport.id.label("id"),
                     PropertyLot.property_id.label("property_id"),
-                    Property.name.label("property_name"),        
+                    Property.name.label("property_name"),
                     MaintenanceReport.lot_id.label("lot_id"),
-                    Lot.name.label("lot_name"),                  
+                    Lot.name.label("lot_name"),
                     Owner.document_number.label("owner_document"),
                     TypeFailure.name.label("failure_type"),
                     MaintenanceReport.description_failure,
                     MaintenanceReport.date,
                     Vars.name.label("status"),
-                    TA.user_id.label("technician_id"),          
+                    TA.user_id.label("technician_id"),
                     Tech.name.label("tech_name"),
                     Tech.first_last_name.label("tech_last1"),
                     Tech.second_last_name.label("tech_last2"),
-
                 )
                 .join(PropertyLot, PropertyLot.lot_id == MaintenanceReport.lot_id)
-                .join(Property,    Property.id == PropertyLot.property_id)   
-                .join(Lot,         Lot.id == MaintenanceReport.lot_id)       
+                .join(Property,    Property.id == PropertyLot.property_id)
+                .join(Lot,         Lot.id == MaintenanceReport.lot_id)
                 .join(PropertyUser, PropertyUser.property_id == PropertyLot.property_id)
                 .join(Owner,        Owner.id == PropertyUser.user_id)
                 .join(TypeFailure,  MaintenanceReport.type_failure_id == TypeFailure.id)
                 .join(Vars,         MaintenanceReport.maintenance_status_id == Vars.id)
+                .outerjoin(TA,    TA.report_id == MaintenanceReport.id)   # ← aquí
+                .outerjoin(Tech,  Tech.id == TA.user_id)                 # ← y aquí
                 .all()
             )
+
             data = [{
-                "id":                   r.id,
-                "property_id":          r.property_id,
-                "property_name":        r.property_name,         
-                "lot_id":               r.lot_id,
-                "lot_name":             r.lot_name,              
-                "owner_document":       r.owner_document,
-                "failure_type":         r.failure_type,
-                "description_failure":  r.description_failure,
-                "date":                 r.date,
-                "status":               r.status,
-                "technician_id":        r.technician_id,          
-                "technician_name":     (
-                f"{r.tech_name} {r.tech_last1} {r.tech_last2}"
-                if r.tech_name else None
+                "id":                  r.id,
+                "property_id":         r.property_id,
+                "property_name":       r.property_name,
+                "lot_id":              r.lot_id,
+                "lot_name":            r.lot_name,
+                "owner_document":      r.owner_document,
+                "failure_type":        r.failure_type,
+                "description_failure": r.description_failure,
+                "date":                r.date,
+                "status":              r.status,
+                "technician_id":       r.technician_id,
+                "technician_name": (
+                    f"{r.tech_name} {r.tech_last1} {r.tech_last2}"
+                    if r.tech_name else None
                 ),
-         
             } for r in rows]
-            return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
+
+            return JSONResponse(
+                status_code=200,
+                content=jsonable_encoder({"success": True, "data": data})
+            )
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
