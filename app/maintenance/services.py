@@ -176,33 +176,37 @@ class MaintenanceService:
                 .join(Owner,        Owner.id == PropertyUser.user_id)
                 .join(TypeFailure,  MaintenanceReport.type_failure_id == TypeFailure.id)
                 .join(Vars,         MaintenanceReport.maintenance_status_id == Vars.id)
-                .outerjoin(TA,    TA.report_id == MaintenanceReport.id)   # ← aquí
-                .outerjoin(Tech,  Tech.id == TA.user_id)                 # ← y aquí
+                .outerjoin(TA,    TA.report_id == MaintenanceReport.id)
+                .outerjoin(Tech,  Tech.id == TA.user_id)
                 .all()
             )
 
-            data = [{
-                "id":                  r.id,
-                "property_id":         r.property_id,
-                "property_name":       r.property_name,
-                "lot_id":              r.lot_id,
-                "lot_name":            r.lot_name,
-                "owner_document":      r.owner_document,
-                "failure_type":        r.failure_type,
-                "description_failure": r.description_failure,
-                "date":                r.date,
-                "status":              r.status,
-                "technician_id":       r.technician_id,
-                "technician_name": (
-                    f"{r.tech_name} {r.tech_last1} {r.tech_last2}"
-                    if r.tech_name else None
-                ),
-            } for r in rows]
+            data = []
+            for r in rows:
+                # Si no hay técnico asignado: technician_id = None, name = None
+                if r.technician_id:
+                    parts = [r.tech_name, r.tech_last1, r.tech_last2]
+                    # filter(None, ...) quita None o cadenas vacías
+                    full_name = " ".join(filter(None, parts))
+                else:
+                    full_name = None
 
-            return JSONResponse(
-                status_code=200,
-                content=jsonable_encoder({"success": True, "data": data})
-            )
+                data.append({
+                    "id":                   r.id,
+                    "property_id":          r.property_id,
+                    "property_name":        r.property_name,
+                    "lot_id":               r.lot_id,
+                    "lot_name":             r.lot_name,
+                    "owner_document":       r.owner_document,
+                    "failure_type":         r.failure_type,
+                    "description_failure":  r.description_failure,
+                    "date":                 r.date,
+                    "status":               r.status,
+                    "technician_id":        r.technician_id,
+                    "technician_name":      full_name,
+                })
+
+            return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
