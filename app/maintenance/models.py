@@ -1,5 +1,4 @@
 # app/maintenance/models.py
-
 from datetime import datetime
 from sqlalchemy import (
     Table, Column, Integer, String, DateTime, JSON, ForeignKey,
@@ -296,7 +295,7 @@ class MaintenanceDetail(Base):
     fault_remarks               = Column(String, nullable=True)
     evidence_failure_url        = Column(String, nullable=True)
     type_failure_id             = Column(Integer, ForeignKey('type_failure.id'), nullable=False)
-    type_maintenance            = Column(String, nullable=False)
+    type_maintenance_id        = Column(Integer, ForeignKey('maintenance_type.id'), nullable=False)
     failure_solution_id         = Column(Integer, ForeignKey('failure_solution.id'), nullable=False)
     solution_remarks            = Column(String, nullable=True)
     evidence_solution_url       = Column(String, nullable=True)
@@ -305,3 +304,11 @@ class MaintenanceDetail(Base):
     assignment      = relationship('TechnicianAssignment', back_populates='detail')
     type_failure    = relationship('TypeFailure')
     failure_solution= relationship('FailureSolution')
+    maintenance_type = relationship('MaintenanceType', back_populates='details')
+
+class MaintenanceType(Base):
+    __tablename__ = 'maintenance_type'
+    id   = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), nullable=False)
+
+    details = relationship('MaintenanceDetail', back_populates='maintenance_type')

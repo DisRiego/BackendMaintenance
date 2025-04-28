@@ -1,11 +1,11 @@
 # app/maintenance/services.py
-
+from typing import List
 from datetime import datetime
 from uuid import uuid4
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased  
 
 from app.maintenance.models import (
     Maintenance,
@@ -21,11 +21,12 @@ from app.maintenance.models import (
     TypeFailure,
     Vars,
     Property,
+    MaintenanceType,
     bucket,
     user_role_table,
     role_permission_table,
 )
-from app.maintenance.schemas import MaintenanceDetailCreate
+from app.maintenance.schemas import MaintenanceDetailCreate , MaintenanceTypeSchema
 
 def _upload(file: UploadFile, folder: str) -> str:
     """
@@ -46,10 +47,13 @@ class MaintenanceService:
     def get_maintenances(self):
         """
         Obtener todos los mantenimientos (tabla maintenance), incluyendo
-        property_id y owner_document.
+        property_id, owner_document, técnico asignado.
         """
         try:
             Owner = aliased(User, name="owner")
+            TA    = aliased(TechnicianAssignment, name="ta")
+            Tech  = aliased(User, name="tech")
+
             rows = (
                 self.db.query(
                     Maintenance.id.label("id"),
@@ -59,6 +63,10 @@ class MaintenanceService:
                     Maintenance.description_failure,
                     Maintenance.date,
                     Vars.name.label("status"),
+                    TA.user_id.label("technician_id"),
+                    Tech.name.label("tech_name"),
+                    Tech.first_last_name.label("tech_last1"),
+                    Tech.second_last_name.label("tech_last2"),
                 )
                 .join(DeviceIot, Maintenance.device_iot_id == DeviceIot.id)
                 .join(Lot, DeviceIot.lot_id == Lot.id)
@@ -67,20 +75,39 @@ class MaintenanceService:
                 .join(Owner, Owner.id == PropertyUser.user_id)
                 .join(TypeFailure, Maintenance.type_failure_id == TypeFailure.id)
                 .join(Vars, Maintenance.maintenance_status_id == Vars.id)
+                .outerjoin(TA, TA.maintenance_id == Maintenance.id)
+                .outerjoin(Tech, Tech.id == TA.user_id)
                 .all()
             )
-            data = [{
-                "id": r.id,
-                "property_id": r.property_id,
-                "owner_document": r.owner_document,
-                "failure_type": r.failure_type,
-                "description_failure": r.description_failure,
-                "date": r.date,
-                "status": r.status,
-            } for r in rows]
+            data = []
+            for r in rows:
+                full_name = None
+                if r.technician_id:
+                    parts = [r.tech_name, r.tech_last1, r.tech_last2]
+                    full_name = " ".join(filter(None, parts))
+
+                data.append({
+                    "id": r.id,
+                    "property_id": r.property_id,
+                    "owner_document": r.owner_document,
+                    "failure_type": r.failure_type,
+                    "description_failure": r.description_failure,
+                    "date": r.date,
+                    "status": r.status,
+                    "technician_id": r.technician_id,
+                    "technician_name": full_name,
+                })
+
             return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
         except Exception as e:
             return JSONResponse(status_code=500, content={"success": False, "data": str(e)})
+        
+    def get_maintenance_types(self) -> List[MaintenanceTypeSchema]:
+            """
+            Obtener todos los tipos de mantenimiento y devolver como lista de MaintenanceTypeSchema.
+            """
+            types = self.db.query(MaintenanceType).all()  
+            return [MaintenanceTypeSchema.from_orm(t) for t in types]  
 
     def create_maintenance(self, data):
         """
@@ -97,15 +124,15 @@ class MaintenanceService:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error al crear mantenimiento: {e}")
 
-    def assign_technician(self, maintenance_id: int, user_id: int):
+    def assign_technician(self, maintenance_id: int, user_id: int, assignment_date: datetime):
         """
         Asignar un técnico a un maintenance:
-          - valida permiso 80
-          - comprueba existencia de maintenance
-          - evita asignaciones duplicadas
-          - cambia status a 23
+        - valida permiso 80
+        - comprueba existencia de maintenance
+        - evita duplicados
+        - cambia status a 23
+        - guarda fecha de asignación
         """
-        # permiso 80
         has_perm = (
             self.db.query(user_role_table)
             .join(role_permission_table, user_role_table.c.rol_id == role_permission_table.c.rol_id)
@@ -125,17 +152,21 @@ class MaintenanceService:
         if self.db.query(TechnicianAssignment).filter_by(maintenance_id=maintenance_id).first():
             raise HTTPException(status_code=400, detail="Ya existe técnico asignado")
 
-        assignment = TechnicianAssignment(maintenance_id=maintenance_id, user_id=user_id)
+        assignment = TechnicianAssignment(
+            maintenance_id=maintenance_id,
+            user_id=user_id,
+            assignment_date=assignment_date
+        )
         maint.maintenance_status_id = 23
         self.db.add(assignment)
         self.db.commit()
         self.db.refresh(assignment)
 
         result = {
-            "id":             assignment.id,
+            "id": assignment.id,
             "maintenance_id": assignment.maintenance_id,
-            "user_id":        assignment.user_id,
-            "assignment_date":assignment.assignment_date
+            "user_id": assignment.user_id,
+            "assignment_date": assignment.assignment_date
         }
         return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": result}))
 
@@ -387,47 +418,47 @@ class MaintenanceService:
         return JSONResponse(content=jsonable_encoder({"success": True, "data": data}), status_code=200)
 
     async def finalize_assignment(
-        self,
-        data: MaintenanceDetailCreate,
-        evidence_failure: UploadFile,
-        evidence_solution: UploadFile
-    ):
-        """
-        Finaliza un mantenimiento o reporte asignado:
-         - Sube evidencias a Firebase
-         - Crea registro en maintenance_detail
-         - Cambia el estado a 25 (Finalizado)
-        """
-        asgmt = self.db.get(TechnicianAssignment, data.technician_assignment_id)
-        if not asgmt:
-            raise HTTPException(status_code=404, detail="Asignación no encontrada")
+            self,
+            data: MaintenanceDetailCreate,
+            evidence_failure: UploadFile,
+            evidence_solution: UploadFile
+        ):
+            """
+            Finaliza un mantenimiento o reporte asignado:
+            - Sube evidencias a Firebase
+            - Crea registro en maintenance_detail
+            - Cambia el estado a 25 (Finalizado)
+            """
+            asgmt = self.db.get(TechnicianAssignment, data.technician_assignment_id)
+            if not asgmt:
+                raise HTTPException(status_code=404, detail="Asignación no encontrada")
 
-        # subir evidencias
-        url_fail = _upload(evidence_failure, "failures")
-        url_sol  = _upload(evidence_solution,  "solutions")
+            url_fail = _upload(evidence_failure, "failures")
+            url_sol  = _upload(evidence_solution, "solutions")
 
-        detail = MaintenanceDetail(
-            technician_assignment_id = data.technician_assignment_id,
-            fault_remarks            = data.fault_remarks,
-            evidence_failure_url     = url_fail,
-            type_failure_id          = data.type_failure_id,
-            type_maintenance         = data.type_maintenance,
-            failure_solution_id      = data.failure_solution_id,
-            solution_remarks         = data.solution_remarks,
-            evidence_solution_url    = url_sol
-        )
-        self.db.add(detail)
+            detail = MaintenanceDetail(
+                technician_assignment_id = data.technician_assignment_id,
+                fault_remarks            = data.fault_remarks,
+                evidence_failure_url     = url_fail,
+                type_failure_id          = data.type_failure_id,
+                type_maintenance_id      = data.type_maintenance_id,  # <- importante
+                failure_solution_id      = data.failure_solution_id,
+                solution_remarks         = data.solution_remarks,
+                evidence_solution_url    = url_sol
+            )
+            self.db.add(detail)
 
-        if asgmt.maintenance_id:
-            obj = self.db.get(Maintenance, asgmt.maintenance_id)
-        else:
-            obj = self.db.get(MaintenanceReport, asgmt.report_id)
-        obj.maintenance_status_id = 25
+            if asgmt.maintenance_id:
+                obj = self.db.get(Maintenance, asgmt.maintenance_id)
+            else:
+                obj = self.db.get(MaintenanceReport, asgmt.report_id)
+            obj.maintenance_status_id = 25
 
-        self.db.commit()
-        self.db.refresh(detail)
+            self.db.commit()
+            self.db.refresh(detail)
 
-        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": detail}))
+            return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": detail}))
+
     
     def get_failure_solutions(self):
         """
@@ -699,7 +730,7 @@ class MaintenanceService:
         self,
         detail_id: int,
         data,
-        evidence_failure:  UploadFile | None = None,
+        evidence_failure: UploadFile | None = None,
         evidence_solution: UploadFile | None = None,
     ):
         """
@@ -714,7 +745,6 @@ class MaintenanceService:
         for k, v in payload.items():
             setattr(detail, k, v)
 
-        # evidencias opcionales
         if evidence_failure:
             detail.evidence_failure_url = _upload(evidence_failure, "failures")
         if evidence_solution:

@@ -1,5 +1,5 @@
 # app/maintenance/routes.py
-
+from datetime import datetime
 from fastapi import APIRouter, Depends, Body, Form, File, UploadFile
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
@@ -17,7 +17,8 @@ from app.maintenance.schemas import (
     ReportDetailSchema,
     MaintenanceReportAssign,
     MaintenanceDetailUpdate,
-    MaintenanceReportUpdate
+    MaintenanceReportUpdate,
+    MaintenanceTypeSchema
     
 )
 
@@ -27,6 +28,11 @@ router = APIRouter(prefix="/maintenance", tags=["Maintenance"])
 def get_maintenances(db: Session = Depends(get_db)) -> Any:
     """Obtener todos los mantenimientos (tabla maintenance)."""
     return MaintenanceService(db).get_maintenances()
+
+@router.get("/maintenance-types", response_model=List[MaintenanceTypeSchema])
+def list_maintenance_types(db: Session = Depends(get_db)):
+    return MaintenanceService(db).get_maintenance_types()
+
 
 @router.post("/", response_model=Dict)
 def create_maintenance(
@@ -43,10 +49,11 @@ def create_maintenance(
 def assign_maintenance(
     maintenance_id: int,
     user_id:        int = Body(..., embed=True, description="ID del técnico a asignar"),
+    assignment_date:datetime = Body(..., embed=True, description="Fecha de asignación (ISO)"),
     db:             Session = Depends(get_db)
 ) -> Any:
     """Asignar técnico a un mantenimiento existente."""
-    return MaintenanceService(db).assign_technician(maintenance_id, user_id)
+    return MaintenanceService(db).assign_technician(maintenance_id, user_id, assignment_date)
 
 @router.get("/reports", response_model=List[MaintenanceReportResponse])
 def get_reports(db: Session = Depends(get_db)) -> Any:
@@ -95,7 +102,7 @@ async def finalize_assignment(
     technician_assignment_id: int        = Form(..., description="ID de la asignación"),
     fault_remarks:            str        = Form(..., description="Observaciones del fallo"),
     type_failure_id:          int        = Form(..., description="ID del tipo de fallo"),
-    type_maintenance:         str        = Form(..., description="Correctivo o Preventivo"),
+    type_maintenance_id:      int        = Form(..., description="ID del tipo de mantenimiento aplicado"),
     failure_solution_id:      int        = Form(..., description="ID de la solución aplicada"),
     solution_remarks:         str        = Form(..., description="Observaciones de la solución"),
     evidence_failure:         UploadFile = File(..., description="Imagen de evidencia del fallo"),
@@ -114,7 +121,7 @@ async def finalize_assignment(
         technician_assignment_id = technician_assignment_id,
         fault_remarks            = fault_remarks,
         type_failure_id          = type_failure_id,
-        type_maintenance         = type_maintenance,
+        type_maintenance_id      = type_maintenance_id,  # <- int
         failure_solution_id      = failure_solution_id,
         solution_remarks         = solution_remarks
     )

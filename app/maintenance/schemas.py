@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -78,7 +78,7 @@ class MaintenanceDetailCreate(BaseModel):
     technician_assignment_id: int   = Field(..., description="ID de la asignación en technician_assignment")
     fault_remarks:            str   = Field(..., description="Observaciones del fallo")
     type_failure_id:          int   = Field(..., description="ID del tipo de fallo detectado")
-    type_maintenance:         str   = Field(..., description="Correctivo o Preventivo")
+    type_maintenance_id:      int   = Field(..., description="ID del tipo de mantenimiento")
     failure_solution_id:      int   = Field(..., description="ID de la solución aplicada")
     solution_remarks:         str   = Field(..., description="Observaciones de la solución")
 
@@ -88,7 +88,8 @@ class MaintenanceDetailResponse(BaseModel):
     fault_remarks:             Optional[str]
     evidence_failure_url:      Optional[str]
     type_failure_id:           int
-    type_maintenance:          str
+    type_maintenance_id:       int
+    type_maintenance_name:     str 
     failure_solution_id:       int
     solution_remarks:          Optional[str]
     evidence_solution_url:     Optional[str]
@@ -142,7 +143,8 @@ class ReportDetailSchema(BaseModel):
     # Detalle técnico (si finalizado)
     technician_name:     Optional[str]     = Field(None, description="Nombre del técnico")
     technician_document: Optional[str]     = Field(None, description="Documento del técnico")
-    type_maintenance:    Optional[str]     = Field(None, description="Tipo de mantenimiento aplicado")
+    type_maintenance_id:    Optional[int]     = Field(None, description="Tipo de mantenimiento aplicado")
+    type_maintenance_name:     Optional[str] = Field(..., description="Nombre del tipo de mantenimiento")
     fault_remarks:       Optional[str]     = Field(None, description="Observaciones del fallo detectado")
     solution_name:       Optional[str]     = Field(None, description="Nombre de la solución aplicada")
     solution_remarks:    Optional[str]     = Field(None, description="Observaciones de la solución")
@@ -162,6 +164,14 @@ class MaintenanceReportUpdate(BaseModel):
 class MaintenanceDetailUpdate(BaseModel):
     fault_remarks:       Optional[str]
     type_failure_id:     Optional[int]
-    type_maintenance:    Optional[str]
+    type_maintenance_id: Optional[int]
     failure_solution_id: Optional[int]
     solution_remarks:    Optional[str]
+
+
+class MaintenanceTypeSchema(BaseModel):
+    id:   int    = Field(..., description="ID del tipo de mantenimiento")
+    name: str    = Field(..., description="Nombre (Correctivo o Preventivo)")
+
+    # en Pydantic v2 habilita from_orm / from_attributes
+    model_config = ConfigDict(from_attributes=True)
