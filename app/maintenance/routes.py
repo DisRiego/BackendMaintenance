@@ -18,7 +18,9 @@ from app.maintenance.schemas import (
     MaintenanceReportAssign,
     MaintenanceDetailUpdate,
     MaintenanceReportUpdate,
-    MaintenanceTypeSchema
+    MaintenanceTypeSchema,
+    MaintenanceUpdate,
+    AssignmentUpdate
     
 )
 
@@ -224,6 +226,81 @@ async def edit_finalization(
     Permite modificar un registro de maintenance_detail.
     Las evidencias son opcionales; si se envían se reemplazan.
     """
+    return await MaintenanceService(db).update_finalization(
+        detail_id,
+        body,
+        evidence_failure,
+        evidence_solution
+    )
+
+
+# ——— EDIT REPORT ———
+
+@router.put("/reports/{report_id}", response_model=Dict)
+def edit_report(
+    report_id: int,
+    body:      MaintenanceReportUpdate,
+    db:        Session = Depends(get_db)
+) -> Any:
+    return MaintenanceService(db).update_report(report_id, body)
+
+@router.put("/reports/{report_id}/assign", response_model=Dict)
+def edit_report_assignment(
+    report_id: int,
+    assign:    AssignmentUpdate = Body(...),
+    db:        Session        = Depends(get_db)
+) -> Any:
+    return MaintenanceService(db).update_report_assignment(
+        report_id,
+        assign.user_id,
+        assign.assignment_date
+    )
+
+@router.put("/finalize/{detail_id}", response_model=Dict)
+async def edit_report_finalization(
+    detail_id:           int,
+    body:                MaintenanceDetailUpdate = Depends(),
+    evidence_failure:    UploadFile | None        = File(None),
+    evidence_solution:   UploadFile | None        = File(None),
+    db:                  Session                 = Depends(get_db)
+) -> Any:
+    return await MaintenanceService(db).update_finalization(
+        detail_id,
+        body,
+        evidence_failure,
+        evidence_solution
+    )
+
+# ——— EDIT MAINTENANCE ———
+
+@router.put("/{maintenance_id}", response_model=Dict)
+def edit_maintenance(
+    maintenance_id: int,
+    body:           MaintenanceUpdate,
+    db:             Session           = Depends(get_db)
+) -> Any:
+    return MaintenanceService(db).update_maintenance(maintenance_id, body)
+
+@router.put("/{maintenance_id}/assign", response_model=Dict)
+def edit_maintenance_assignment(
+    maintenance_id: int,
+    assign:         AssignmentUpdate = Body(...),
+    db:              Session           = Depends(get_db)
+) -> Any:
+    return MaintenanceService(db).update_maintenance_assignment(
+        maintenance_id,
+        assign.user_id,
+        assign.assignment_date
+    )
+
+@router.put("/finalize/{detail_id}", response_model=Dict)
+async def edit_maintenance_finalization(
+    detail_id:           int,
+    body:                MaintenanceDetailUpdate = Depends(),
+    evidence_failure:    UploadFile | None        = File(None),
+    evidence_solution:   UploadFile | None        = File(None),
+    db:                  Session                 = Depends(get_db)
+) -> Any:
     return await MaintenanceService(db).update_finalization(
         detail_id,
         body,

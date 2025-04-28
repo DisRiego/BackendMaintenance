@@ -175,3 +175,14 @@ class MaintenanceTypeSchema(BaseModel):
 
     # en Pydantic v2 habilita from_orm / from_attributes
     model_config = ConfigDict(from_attributes=True)
+
+
+
+class MaintenanceUpdate(BaseModel):
+    type_failure_id:      Optional[int]   = Field(None, description="ID del tipo de fallo")
+    description_failure:  Optional[str]   = Field(None, description="Descripción del fallo")
+    maintenance_status_id:Optional[int]   = Field(None, description="ID del estado de mantenimiento")
+
+class AssignmentUpdate(BaseModel):
+    user_id:         int       = Field(..., description="ID del técnico a asignar")
+    assignment_date: datetime  = Field(..., description="Fecha de asignación (ISO)")

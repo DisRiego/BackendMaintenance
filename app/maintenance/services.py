@@ -26,7 +26,7 @@ from app.maintenance.models import (
     user_role_table,
     role_permission_table,
 )
-from app.maintenance.schemas import MaintenanceDetailCreate , MaintenanceTypeSchema
+from app.maintenance.schemas import MaintenanceDetailCreate , MaintenanceTypeSchema , MaintenanceUpdate
 
 def _upload(file: UploadFile, folder: str) -> str:
     """
@@ -753,3 +753,56 @@ class MaintenanceService:
         self.db.commit()
         self.db.refresh(detail)
         return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": detail}))
+    
+
+
+    def update_maintenance(self, maintenance_id: int, data: MaintenanceUpdate):
+        maint = self.db.get(Maintenance, maintenance_id)
+        if not maint:
+            raise HTTPException(status_code=404, detail="Mantenimiento no encontrado")
+        payload = data.dict(exclude_unset=True)
+        for k, v in payload.items():
+            setattr(maint, k, v)
+        self.db.commit()
+        self.db.refresh(maint)
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": maint}))
+
+    def update_maintenance_assignment(self, maintenance_id: int, user_id: int, assignment_date: datetime):
+        asgmt = (
+            self.db.query(TechnicianAssignment)
+            .filter_by(maintenance_id=maintenance_id)
+            .first()
+        )
+        if not asgmt:
+            raise HTTPException(status_code=404, detail="Asignación no encontrada")
+        asgmt.user_id = user_id
+        asgmt.assignment_date = assignment_date
+        self.db.commit()
+        self.db.refresh(asgmt)
+        result = {
+            "id":               asgmt.id,
+            "maintenance_id":   asgmt.maintenance_id,
+            "user_id":          asgmt.user_id,
+            "assignment_date":  asgmt.assignment_date
+        }
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": result}))
+
+    def update_report_assignment(self, report_id: int, user_id: int, assignment_date: datetime):
+        asgmt = (
+            self.db.query(TechnicianAssignment)
+            .filter_by(report_id=report_id)
+            .first()
+        )
+        if not asgmt:
+            raise HTTPException(status_code=404, detail="Asignación no encontrada")
+        asgmt.user_id = user_id
+        asgmt.assignment_date = assignment_date
+        self.db.commit()
+        self.db.refresh(asgmt)
+        result = {
+            "id":               asgmt.id,
+            "report_id":        asgmt.report_id,
+            "user_id":          asgmt.user_id,
+            "assignment_date":  asgmt.assignment_date
+        }
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": result}))
