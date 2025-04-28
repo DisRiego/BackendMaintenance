@@ -256,12 +256,12 @@ def edit_report_assignment(
         assign.assignment_date
     )
 
-@router.put("/finalize/{detail_id}", response_model=Dict)
+@router.put("/reports/finalize/{detail_id}", response_model=Dict)
 async def edit_report_finalization(
     detail_id:           int,
     body:                MaintenanceDetailUpdate = Depends(),
-    evidence_failure:    UploadFile | None        = File(None),
-    evidence_solution:   UploadFile | None        = File(None),
+    evidence_failure:    UploadFile | None      = File(None),
+    evidence_solution:   UploadFile | None      = File(None),
     db:                  Session                 = Depends(get_db)
 ) -> Any:
     return await MaintenanceService(db).update_finalization(
@@ -270,6 +270,7 @@ async def edit_report_finalization(
         evidence_failure,
         evidence_solution
     )
+
 
 # ——— EDIT MAINTENANCE ———
 
@@ -293,8 +294,9 @@ def edit_maintenance_assignment(
         assign.assignment_date
     )
 
-@router.put("/finalize/{detail_id}", response_model=Dict)
+@router.put("/{maintenance_id}/finalize/{detail_id}", response_model=Dict)
 async def edit_maintenance_finalization(
+    maintenance_id:      int,
     detail_id:           int,
     body:                MaintenanceDetailUpdate = Depends(),
     evidence_failure:    UploadFile | None        = File(None),
