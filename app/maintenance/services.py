@@ -530,7 +530,7 @@ class MaintenanceService:
             "report_date":         rpt.date,
             "failure_type":        rpt.type_failure.name,
             "description_failure": rpt.description_failure,
-            
+            "technician_assignment_id": asgmt.id if asgmt else None,
             "assignment_date":   asgmt.assignment_date if asgmt else None,
             "finalized":         bool(detail),
             "finalization_date": detail.date if detail else None,
@@ -595,6 +595,7 @@ class MaintenanceService:
             "status":              maint.status.name,
             "status_id":      maint.maintenance_status_id,      
             "assignment_date":     assign_date,
+            "technician_assignment_id": asgmt.id if asgmt else None,
             "finalized":           bool(detail),
             "finalization_date":   detail.date if detail else None,
             "technician_name":     detail.assignment.technician.name if detail else None,
