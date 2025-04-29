@@ -39,6 +39,7 @@ def _upload(file: UploadFile, folder: str) -> str:
     blob = bucket.blob(blob_name)
     content = file.file.read()
     blob.upload_from_string(content, content_type=file.content_type)
+    blob.make_public()
     return blob.public_url
 
 class MaintenanceService:
