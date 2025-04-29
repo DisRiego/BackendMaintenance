@@ -25,6 +25,7 @@ from app.maintenance.models import (
     bucket,
     user_role_table,
     role_permission_table,
+    failure_solution_maintenance_type_table
 )
 from app.maintenance.schemas import MaintenanceDetailCreate , MaintenanceTypeSchema , MaintenanceUpdate
 
@@ -536,7 +537,7 @@ class MaintenanceService:
             "finalization_date": detail.date if detail else None,
             "technician_id": asgmt.user_id if asgmt else None,
             "technician_name":     detail.assignment.technician.name if detail else None,
-            "type_maintenance":    detail.type_maintenance if detail else None,
+            "type_maintenance_id":    detail.type_maintenance_id if detail else None,
             "fault_remarks":       detail.fault_remarks if detail else None,
             "solution_name":       detail.failure_solution.name if detail else None,
             "solution_remarks":    detail.solution_remarks if detail else None,
@@ -600,7 +601,7 @@ class MaintenanceService:
             "finalization_date":   detail.date if detail else None,
             "technician_name":     detail.assignment.technician.name if detail else None,
             "technician_document": detail.assignment.technician.document_number if detail else None,
-            "type_maintenance":    detail.type_maintenance if detail else None,
+            "type_maintenance_id":    detail.type_maintenance_id if detail else None,
             "fault_remarks":       detail.fault_remarks if detail else None,
             "solution_name":       detail.failure_solution.name if detail else None,
             "solution_remarks":    detail.solution_remarks if detail else None,
@@ -812,3 +813,22 @@ class MaintenanceService:
             "assignment_date":  asgmt.assignment_date
         }
         return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": result}))
+
+    def get_failure_solutions_by_maintenance_type(self, maintenance_type_id: int):
+        exists = self.db.query(MaintenanceType).filter_by(id=maintenance_type_id).first()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Tipo de mantenimiento no encontrado.")
+
+        results = (
+            self.db.query(FailureSolution.id, FailureSolution.name, FailureSolution.description)
+            .join(
+                failure_solution_maintenance_type_table,
+                FailureSolution.id == failure_solution_maintenance_type_table.c.failure_solution_id
+            )
+            .filter(failure_solution_maintenance_type_table.c.maintenance_type_id == maintenance_type_id)
+            .distinct()
+            .all()
+        )
+
+        data = [{"id": r[0], "name": r[1], "description": r[2]} for r in results]
+        return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))

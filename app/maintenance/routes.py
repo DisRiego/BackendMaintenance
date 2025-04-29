@@ -137,6 +137,14 @@ def list_failure_solutions(db: Session = Depends(get_db)) -> Any:
     """Obtener todos los tipos de solución."""
     return MaintenanceService(db).get_failure_solutions()
 
+@router.get("/failure-solutions/by-maintenance-type/{maintenance_type_id}", response_model=List[FailureSolutionSchema])
+def list_failure_solutions_by_maintenance_type(
+    maintenance_type_id: int,
+    db: Session = Depends(get_db)
+) -> Any:
+    """Obtener soluciones filtradas por tipo de mantenimiento (correctivo o preventivo)."""
+    return MaintenanceService(db).get_failure_solutions_by_maintenance_type(maintenance_type_id)
+
 @router.get("/failure-types", response_model=List[TypeFailureSchema])
 def list_failure_types(db: Session = Depends(get_db)) -> Any:
     """Obtener todos los tipos de fallo."""

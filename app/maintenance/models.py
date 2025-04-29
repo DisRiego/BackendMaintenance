@@ -56,6 +56,15 @@ role_permission_table = Table(
     extend_existing=True
 )
 
+failure_solution_maintenance_type_table = Table(
+    "failure_solution_maintenance_type",  # nombre real en tu base de datos
+    Base.metadata,
+    Column("id", Integer, primary_key=True, index=True),
+    Column("failure_solution_id", Integer, ForeignKey("failure_solution.id"), nullable=False),
+    Column("maintenance_type_id", Integer, ForeignKey("maintenance_type.id"), nullable=False),
+    extend_existing=True
+)
+
 class Role(Base):
     __tablename__ = "rol"
     __table_args__ = {'extend_existing': True}
@@ -316,3 +325,5 @@ class MaintenanceType(Base):
     name = Column(String(50), nullable=False)
 
     details = relationship('MaintenanceDetail', back_populates='maintenance_type')
+
+    
