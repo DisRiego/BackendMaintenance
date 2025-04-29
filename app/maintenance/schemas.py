@@ -129,7 +129,10 @@ class ReportDetailSchema(BaseModel):
     failure_type:        str       = Field(..., description="Tipo de fallo")
     description_failure: Optional[str] = Field(None, description="Descripción del fallo")
     status_id:           int       = Field(..., description="ID del estado actual")
-
+    technician_assignment_id: Optional[int] = Field(
+        None,
+        description="ID de la asignación del técnico (si existe)"
+    )
     # Opcional: exponer también el estado actual
     status:              str       = Field(..., description="Estado del mantenimiento o reporte")  
 
