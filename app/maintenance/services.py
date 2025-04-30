@@ -6,7 +6,6 @@ from fastapi import HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session, aliased  
-
 from app.firebase_config import bucket  
 
 from app.maintenance.models import (
@@ -24,7 +23,6 @@ from app.maintenance.models import (
     Vars,
     Property,
     MaintenanceType,
-    bucket,
     user_role_table,
     role_permission_table,
     failure_solution_maintenance_type_table
