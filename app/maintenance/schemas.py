@@ -128,6 +128,8 @@ class ReportDetailSchema(BaseModel):
     report_date:         datetime  = Field(..., description="Fecha del reporte")
     failure_type:        str       = Field(..., description="Tipo de fallo")
     description_failure: Optional[str] = Field(None, description="Descripción del fallo")
+    failure_solution_id:  Optional[int] = Field(None, description="ID de la solución aplicada")
+    type_failure_id:      Optional[int] = Field(None, description="ID del tipo de fallo detectado")
     detail_id:           Optional[int]     = Field(None, description="ID del detalle de mantenimiento (si existe)")
     status_id:           int       = Field(..., description="ID del estado actual")
     technician_assignment_id: Optional[int] = Field(

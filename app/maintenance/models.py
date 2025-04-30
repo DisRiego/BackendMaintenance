@@ -229,8 +229,6 @@ class Maintenance(Base):
     id                    = Column(Integer, primary_key=True, index=True)
     device_iot_id         = Column(Integer, ForeignKey('device_iot.id'), nullable=False)
     type_failure_id       = Column(Integer, ForeignKey('type_failure.id'), nullable=False)
-    latitude              = Column(Float,   nullable=True)
-    longitude             = Column(Float,   nullable=True)
     description_failure   = Column(String,  nullable=True)
     date                  = Column(DateTime, default=datetime.now)
     maintenance_status_id = Column(Integer, ForeignKey('vars.id'), nullable=False)
