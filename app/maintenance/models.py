@@ -1,46 +1,12 @@
 # app/maintenance/models.py
+
 from datetime import datetime
 from sqlalchemy import (
     Table, Column, Integer, String, DateTime, JSON, ForeignKey,
-    Float, Date, Boolean, Numeric, func, CheckConstraint
+    Float, Date, CheckConstraint
 )
 from sqlalchemy.orm import relationship, validates
 from app.database import Base
-import json
-import os
-import firebase_admin
-from firebase_admin import credentials, storage
-from dotenv import load_dotenv
-
-
-# Carga de variables de entorno
-load_dotenv()
-
-# 1) Leer las credenciales JSON desde la variable de entorno
-raw = os.getenv("FIREBASE_CREDENTIALS")
-if not raw:
-    raise ValueError("FIREBASE_CREDENTIALS no está definido en .env o está vacío.")
-raw = raw.strip()
-if (raw.startswith("'") and raw.endswith("'")) or (raw.startswith('"') and raw.endswith('"')):
-    raw = raw[1:-1]
-unescaped = raw.encode("utf-8").decode("unicode_escape")
-firebase_credentials = json.loads(unescaped)
-
-# Asegurar que la private_key tenga saltos de línea correctos
-firebase_credentials["private_key"] = firebase_credentials["private_key"].replace("\\n", "\n").strip()
-
-# 2) Inicializar Firebase Admin con el bucket de Storage
-storage_bucket = os.getenv("FIREBASE_STORAGE_BUCKET")
-if not storage_bucket:
-    raise ValueError("FIREBASE_STORAGE_BUCKET no está definido en .env o está vacío.")
-storage_bucket = storage_bucket.strip()
-
-if not firebase_admin._apps:
-    cred = credentials.Certificate(firebase_credentials)
-    firebase_admin.initialize_app(cred, {"storageBucket": storage_bucket})
-
-# 3) Objeto bucket global
-bucket = storage.bucket()
 
 # Tablas de autenticación
 user_role_table = Table(
@@ -56,14 +22,16 @@ role_permission_table = Table(
     extend_existing=True
 )
 
+# Relación many-to-many entre failure_solution y maintenance_type
 failure_solution_maintenance_type_table = Table(
-    "failure_solution_maintenance_type",  # nombre real en tu base de datos
+    "failure_solution_maintenance_type",
     Base.metadata,
-    Column("id", Integer, primary_key=True, index=True),
-    Column("failure_solution_id", Integer, ForeignKey("failure_solution.id"), nullable=False),
-    Column("maintenance_type_id", Integer, ForeignKey("maintenance_type.id"), nullable=False),
+    Column("id",                   Integer, primary_key=True, index=True),
+    Column("failure_solution_id",  Integer, ForeignKey("failure_solution.id"),  nullable=False),
+    Column("maintenance_type_id",  Integer, ForeignKey("maintenance_type.id"),  nullable=False),
     extend_existing=True
 )
+
 
 class Role(Base):
     __tablename__ = "rol"
@@ -76,7 +44,8 @@ class Role(Base):
 
     permissions = relationship("Permission", secondary=role_permission_table, back_populates="roles")
     users       = relationship("User",       secondary=user_role_table,      back_populates="roles")
-    vars        = relationship('Vars', back_populates='role')
+    vars        = relationship("Vars", back_populates="role")
+
 
 class Permission(Base):
     __tablename__ = "permission"
@@ -89,15 +58,18 @@ class Permission(Base):
 
     roles = relationship("Role", secondary=role_permission_table, back_populates="permissions")
 
+
 class Vars(Base):
     __tablename__ = 'vars'
 
     id   = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
 
-    role = relationship('Role', back_populates='vars')
+    role = relationship("Role", back_populates="vars")
+
 
 # Modelos de IoT y dispositivos
+
 class DeviceCategories(Base):
     __tablename__ = 'device_categories'
     __table_args__ = {'extend_existing': True}
@@ -107,6 +79,7 @@ class DeviceCategories(Base):
     description = Column(String)
 
     device_types = relationship('DeviceType', back_populates='device_category')
+
 
 class DeviceType(Base):
     __tablename__ = 'device_type'
@@ -119,16 +92,18 @@ class DeviceType(Base):
     device_category = relationship('DeviceCategories', back_populates='device_types')
     devices         = relationship('Device', back_populates='device_type')
 
+
 class Device(Base):
     __tablename__ = 'devices'
     __table_args__ = {'extend_existing': True}
 
-    id               = Column(Integer, primary_key=True, index=True)
-    device_type_id   = Column(Integer, ForeignKey('device_type.id'))
-    properties       = Column(JSON)
+    id             = Column(Integer, primary_key=True, index=True)
+    device_type_id = Column(Integer, ForeignKey('device_type.id'))
+    properties     = Column(JSON)
 
     device_type = relationship('DeviceType', back_populates='devices')
     device_iot  = relationship('DeviceIot', back_populates='device', uselist=False)
+
 
 class Lot(Base):
     __tablename__ = 'lot'
@@ -150,12 +125,14 @@ class Lot(Base):
     def __repr__(self):
         return f"<Lot(id={self.id}, name={self.name}, state={self.state})>"
 
+
 class MaintenanceInterval(Base):
     __tablename__ = 'maintenance_intervals'
 
     id   = Column(Integer, primary_key=True, index=True)
     name = Column(String(30))
     days = Column(Integer)
+
 
 class DeviceIot(Base):
     __tablename__ = 'device_iot'
@@ -186,7 +163,9 @@ class DeviceIot(Base):
             raise ValueError(f"Estado {value} no válido. Válidos: {valid_ids}")
         return value
 
+
 # Relaciones predio ↔ usuarios y lotes
+
 class Property(Base):
     __tablename__ = 'property'
 
@@ -202,11 +181,13 @@ class Property(Base):
 
     property_users = relationship('PropertyUser', back_populates='property')
 
+
 class PropertyLot(Base):
     __tablename__ = 'property_lot'
 
     property_id = Column(Integer, ForeignKey('property.id'), primary_key=True)
     lot_id      = Column(Integer, ForeignKey('lot.id'),      primary_key=True)
+
 
 class PropertyUser(Base):
     __tablename__ = 'user_property'
@@ -217,6 +198,7 @@ class PropertyUser(Base):
     property = relationship('Property', back_populates='property_users')
     user     = relationship('User',     back_populates='property_users')
 
+
 class User(Base):
     __tablename__ = 'users'
 
@@ -225,12 +207,13 @@ class User(Base):
     first_last_name  = Column(String, nullable=False)
     second_last_name = Column(String, nullable=False)
     document_number  = Column(String, nullable=False)
-    email  = Column(String, nullable=False)
-    phone  = Column(String, nullable=False)
+    email            = Column(String, nullable=False)
+    phone            = Column(String, nullable=False)
 
     roles           = relationship('Role', secondary=user_role_table, back_populates='users')
     property_users  = relationship('PropertyUser', back_populates='user')
     assignments     = relationship('TechnicianAssignment', back_populates='technician', cascade='all, delete-orphan')
+
 
 class TypeFailure(Base):
     __tablename__ = 'type_failure'
@@ -239,15 +222,16 @@ class TypeFailure(Base):
     name        = Column(String(100), nullable=False)
     description = Column(String(45), nullable=False)
 
+
 class Maintenance(Base):
     __tablename__ = 'maintenance'
 
     id                    = Column(Integer, primary_key=True, index=True)
     device_iot_id         = Column(Integer, ForeignKey('device_iot.id'), nullable=False)
     type_failure_id       = Column(Integer, ForeignKey('type_failure.id'), nullable=False)
-    latitude                    = Column(Integer, nullable=True)
-    longitude                    = Column(Integer, nullable=True)
-    description_failure   = Column(String, nullable=True)
+    latitude              = Column(Float,   nullable=True)
+    longitude             = Column(Float,   nullable=True)
+    description_failure   = Column(String,  nullable=True)
     date                  = Column(DateTime, default=datetime.now)
     maintenance_status_id = Column(Integer, ForeignKey('vars.id'), nullable=False)
 
@@ -255,6 +239,7 @@ class Maintenance(Base):
     type_failure = relationship('TypeFailure')
     status       = relationship('Vars')
     assignments  = relationship('TechnicianAssignment', back_populates='maintenance', cascade='all, delete-orphan')
+
 
 class MaintenanceReport(Base):
     __tablename__ = 'maintenance_report'
@@ -271,6 +256,7 @@ class MaintenanceReport(Base):
     status       = relationship('Vars')
     assignments  = relationship('TechnicianAssignment', back_populates='report', cascade='all, delete-orphan')
 
+
 class TechnicianAssignment(Base):
     __tablename__ = 'technician_assignment'
 
@@ -282,9 +268,9 @@ class TechnicianAssignment(Base):
 
     __table_args__ = (
         CheckConstraint(
-          "(maintenance_id IS NOT NULL AND report_id IS NULL) OR "
-          "(maintenance_id IS NULL AND report_id IS NOT NULL)",
-          name="ck_assignment_one_fk"
+            "(maintenance_id IS NOT NULL AND report_id IS NULL) OR "
+            "(maintenance_id IS NULL AND report_id IS NOT NULL)",
+            name="ck_assignment_one_fk"
         ),
     )
 
@@ -293,6 +279,7 @@ class TechnicianAssignment(Base):
     detail      = relationship('MaintenanceDetail', back_populates='assignment', uselist=False)
     technician  = relationship('User', back_populates='assignments')
 
+
 class FailureSolution(Base):
     __tablename__ = 'failure_solution'
 
@@ -300,30 +287,31 @@ class FailureSolution(Base):
     name        = Column(String, nullable=False)
     description = Column(String)
 
+
 class MaintenanceDetail(Base):
     __tablename__ = 'maintenance_detail'
 
-    id                          = Column(Integer, primary_key=True, index=True)
-    technician_assignment_id    = Column(Integer, ForeignKey('technician_assignment.id'), nullable=False, unique=True)
-    fault_remarks               = Column(String, nullable=True)
-    evidence_failure_url        = Column(String, nullable=True)
-    type_failure_id             = Column(Integer, ForeignKey('type_failure.id'), nullable=False)
-    type_maintenance_id        = Column(Integer, ForeignKey('maintenance_type.id'), nullable=False)
-    failure_solution_id         = Column(Integer, ForeignKey('failure_solution.id'), nullable=False)
-    solution_remarks            = Column(String, nullable=True)
-    evidence_solution_url       = Column(String, nullable=True)
-    date                        = Column(DateTime, default=datetime.now)
+    id                        = Column(Integer, primary_key=True, index=True)
+    technician_assignment_id  = Column(Integer, ForeignKey('technician_assignment.id'), nullable=False, unique=True)
+    fault_remarks             = Column(String, nullable=True)
+    evidence_failure_url      = Column(String, nullable=True)
+    type_failure_id           = Column(Integer, ForeignKey('type_failure.id'), nullable=False)
+    type_maintenance_id       = Column(Integer, ForeignKey('maintenance_type.id'), nullable=False)
+    failure_solution_id       = Column(Integer, ForeignKey('failure_solution.id'), nullable=False)
+    solution_remarks          = Column(String, nullable=True)
+    evidence_solution_url     = Column(String, nullable=True)
+    date                      = Column(DateTime, default=datetime.now)
 
     assignment      = relationship('TechnicianAssignment', back_populates='detail')
     type_failure    = relationship('TypeFailure')
     failure_solution= relationship('FailureSolution')
     maintenance_type = relationship('MaintenanceType', back_populates='details')
 
+
 class MaintenanceType(Base):
     __tablename__ = 'maintenance_type'
-    id   = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), nullable=False)
+
+    id      = Column(Integer, primary_key=True, index=True)
+    name    = Column(String(50), nullable=False)
 
     details = relationship('MaintenanceDetail', back_populates='maintenance_type')
-
-    
