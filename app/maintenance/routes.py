@@ -218,29 +218,39 @@ def edit_report(
 ) -> Any:
     return MaintenanceService(db).update_report(report_id, body)
 
-
 @router.put(
     "/finalize/{detail_id}",
-    response_model=Dict
+    response_model=MaintenanceDetailResponse
 )
 async def edit_finalization(
-    detail_id:           int,
-    body:                MaintenanceDetailUpdate = Depends(),
-    evidence_failure:    UploadFile | None        = File(None),
-    evidence_solution:   UploadFile | None        = File(None),
-    db:                  Session                 = Depends(get_db)
+    detail_id:            int,
+    fault_remarks:        str        = Form(..., description="Observaciones del fallo"),
+    type_failure_id:      int        = Form(..., description="ID del tipo de fallo detectado"),
+    type_maintenance_id:  int        = Form(..., description="ID del tipo de mantenimiento aplicado"),
+    failure_solution_id:  int        = Form(..., description="ID de la solución aplicada"),
+    solution_remarks:     str        = Form(..., description="Observaciones de la solución"),
+    evidence_failure:     UploadFile | None = File(None, description="Imagen de evidencia del fallo"),
+    evidence_solution:    UploadFile | None = File(None, description="Imagen de evidencia de la solución"),
+    db:                   Session    = Depends(get_db)
 ) -> Any:
     """
-    Permite modificar un registro de maintenance_detail.
-    Las evidencias son opcionales; si se envían se reemplazan.
+    Permite modificar un registro de maintenance_detail usando 
+    los mismos campos que la creación de finalize.
     """
-    return await MaintenanceService(db).update_finalization(
+    svc = MaintenanceService(db)
+    update_data = MaintenanceDetailUpdate(
+        fault_remarks       = fault_remarks,
+        type_failure_id     = type_failure_id,
+        type_maintenance_id = type_maintenance_id,
+        failure_solution_id = failure_solution_id,
+        solution_remarks    = solution_remarks
+    )
+    return await svc.update_finalization(
         detail_id,
-        body,
+        update_data,
         evidence_failure,
         evidence_solution
     )
-
 
 # ——— EDIT REPORT ———
 
