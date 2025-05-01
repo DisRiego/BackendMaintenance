@@ -10,8 +10,10 @@ class MaintenanceBase(BaseModel):
     description_failure: str   = Field(..., description="Descripción del fallo")
     maintenance_status_id: int = Field(..., description="ID del estado de mantenimiento")
 
-class MaintenanceCreate(MaintenanceBase):
-    date: datetime = Field(default_factory=datetime.now, description="Fecha del reporte")
+class MaintenanceCreate(BaseModel):
+    device_iot_id:       int    = Field(..., description="ID del dispositivo IoT")
+    type_failure_id:     int    = Field(..., description="ID del tipo de fallo")
+    description_failure: str   = Field(..., description="Descripción del fallo")
 
 class MaintenanceResponse(MaintenanceBase):
     id:   int
