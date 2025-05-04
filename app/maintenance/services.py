@@ -60,6 +60,7 @@ class MaintenanceService:
                 self.db.query(
                     Maintenance.id.label("id"),
                     PropertyLot.property_id.label("property_id"),
+                    Lot.id.label("lot_id"),
                     Owner.document_number.label("owner_document"),
                     TypeFailure.name.label("failure_type"),
                     Maintenance.description_failure,
@@ -91,6 +92,7 @@ class MaintenanceService:
                 data.append({
                     "id": r.id,
                     "property_id": r.property_id,
+                    "lot_id": r.lot_id,
                     "owner_document": r.owner_document,
                     "failure_type": r.failure_type,
                     "description_failure": r.description_failure,
@@ -529,23 +531,29 @@ class MaintenanceService:
             "lot_longitude":       rpt.lot.longitude,
             "status":         rpt.status.name,
             "status_id":      rpt.maintenance_status_id,
-            "type_failure_id":        detail.type_failure_id      if detail else None,
-            "failure_solution_id":    detail.failure_solution_id  if detail else None,
+            "type_failure_id_report":       rpt.type_failure_id,
+            "type_failure_id_detail":       detail.type_failure_id      if detail else None,
+            "failure_solution_id":      detail.failure_solution_id  if detail else None,
             "detail_id":          detail.id if detail else None,
             "owner_document":      owner.document_number,
             "owner_name":          f"{owner.name} {owner.first_last_name} {owner.second_last_name}",
             "owner_email":      owner.email,
             "owner_phone":      owner.phone,
             "report_date":         rpt.date,
-            "failure_type":        rpt.type_failure.name,
+            "failure_type_report":        rpt.type_failure.name,
+            "failure_type_detail":        detail.type_failure.name if detail else None,
             "description_failure": rpt.description_failure,
             "technician_assignment_id": asgmt.id if asgmt else None,
             "assignment_date":   asgmt.assignment_date if asgmt else None,
             "finalized":         bool(detail),
             "finalization_date": detail.date if detail else None,
             "technician_id": asgmt.user_id if asgmt else None,
-            "technician_name":     detail.assignment.technician.name if detail else None,
+            "technician_name": (
+                f"{asgmt.technician.name} {asgmt.technician.first_last_name} {asgmt.technician.second_last_name}"
+                if asgmt and asgmt.technician else None
+            ),
             "type_maintenance_id":    detail.type_maintenance_id if detail else None,
+            "type_maintenance_name": detail.maintenance_type.name if detail and detail.maintenance_type else None,
             "fault_remarks":       detail.fault_remarks if detail else None,
             "solution_name":       detail.failure_solution.name if detail else None,
             "solution_remarks":    detail.solution_remarks if detail else None,
@@ -557,7 +565,7 @@ class MaintenanceService:
     def get_maintenance_detail(self, maintenance_id: int):
         """
         Obtener detalle completo de un mantenimiento IoT,
-        incluyendo nombre de predio, nombre de lote y estado.
+        incluyendo nombre de predio, nombre de lote, ubicación y estado.
         """
         maint = self.db.get(Maintenance, maintenance_id)
         if not maint:
@@ -567,23 +575,25 @@ class MaintenanceService:
         lot_id = self.db.query(DeviceIot.lot_id) \
                         .filter(DeviceIot.id == maint.device_iot_id) \
                         .scalar()
+        lot = self.db.get(Lot, lot_id)
+        
         prop_id = self.db.query(PropertyLot.property_id) \
-                         .filter(PropertyLot.lot_id == lot_id) \
-                         .scalar()
-
+                        .filter(PropertyLot.lot_id == lot_id) \
+                        .scalar()
         prop = self.db.get(Property, prop_id)
-        lot  = self.db.get(Lot, lot_id)
 
+        # dueño
         owner = self.db.query(User) \
-                       .join(PropertyUser, PropertyUser.user_id == User.id) \
-                       .filter(PropertyUser.property_id == prop_id) \
-                       .first()
+                    .join(PropertyUser, PropertyUser.user_id == User.id) \
+                    .filter(PropertyUser.property_id == prop_id) \
+                    .first()
 
         # asignación y detalle
         asgmt = self.db.query(TechnicianAssignment) \
-                      .filter(TechnicianAssignment.maintenance_id == maintenance_id) \
-                      .first()
+                    .filter(TechnicianAssignment.maintenance_id == maintenance_id) \
+                    .first()
         assign_date = asgmt.assignment_date if asgmt else None
+        technician_id = asgmt.user_id if asgmt else None
 
         detail = None
         if asgmt:
@@ -593,33 +603,50 @@ class MaintenanceService:
 
         data = {
             "property_id":         prop_id,
-            "property_name":       prop.name,                
+            "property_name":       prop.name,
+            "property_latitude":   prop.latitude,
+            "property_longitude":  prop.longitude,
             "lot_id":              lot_id,
-            "lot_name":            lot.name,                
+            "lot_name":            lot.name,
+            "lot_latitude":        lot.latitude,
+            "lot_longitude":       lot.longitude,
+            "status":              maint.status.name,
+            "status_id":           maint.maintenance_status_id,
+            "type_failure_id_report":  maint.type_failure_id,
+            "type_failure_id_detail":  detail.type_failure_id      if detail else None,
+            "failure_solution_id":     detail.failure_solution_id  if detail else None,
+            "detail_id":               detail.id if detail else None,
             "owner_document":      owner.document_number,
             "owner_name":          f"{owner.name} {owner.first_last_name} {owner.second_last_name}",
+            "owner_email":         owner.email,
+            "owner_phone":         owner.phone,
             "report_date":         maint.date,
-            "failure_type":        maint.type_failure.name,
+            "failure_type_report": maint.type_failure.name,
+            "failure_type_detail": detail.type_failure.name if detail else None,
             "description_failure": maint.description_failure,
-            "status":              maint.status.name,
-            "type_failure_id":        detail.type_failure_id      if detail else None,
-            "failure_solution_id":    detail.failure_solution_id  if detail else None,
-            "status_id":      maint.maintenance_status_id,      
-            "detail_id":          detail.id if detail else None,
-            "assignment_date":     assign_date,
             "technician_assignment_id": asgmt.id if asgmt else None,
+            "assignment_date":     assign_date,
+            "technician_id":       technician_id,
             "finalized":           bool(detail),
             "finalization_date":   detail.date if detail else None,
-            "technician_name":     detail.assignment.technician.name if detail else None,
-            "technician_document": detail.assignment.technician.document_number if detail else None,
+            "technician_name": (
+                f"{asgmt.technician.name} {asgmt.technician.first_last_name} {asgmt.technician.second_last_name}"
+                if asgmt and asgmt.technician else None
+            ),
+            "technician_document": (
+                asgmt.technician.document_number if asgmt and asgmt.technician else None
+            ),
             "type_maintenance_id":    detail.type_maintenance_id if detail else None,
+            "type_maintenance_name":  detail.maintenance_type.name if detail and detail.maintenance_type else None,
             "fault_remarks":       detail.fault_remarks if detail else None,
             "solution_name":       detail.failure_solution.name if detail else None,
             "solution_remarks":    detail.solution_remarks if detail else None,
             "evidence_failure_url":  detail.evidence_failure_url if detail else None,
             "evidence_solution_url": detail.evidence_solution_url if detail else None,
         }
+
         return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": data}))
+
     
 
     def get_maintenances_by_user(self, user_id: int):

@@ -10,8 +10,10 @@ class MaintenanceBase(BaseModel):
     description_failure: str   = Field(..., description="Descripción del fallo")
     maintenance_status_id: int = Field(..., description="ID del estado de mantenimiento")
 
-class MaintenanceCreate(MaintenanceBase):
-    date: datetime = Field(default_factory=datetime.now, description="Fecha del reporte")
+class MaintenanceCreate(BaseModel):
+    device_iot_id:       int    = Field(..., description="ID del dispositivo IoT")
+    type_failure_id:     int    = Field(..., description="ID del tipo de fallo")
+    description_failure: str   = Field(..., description="Descripción del fallo")
 
 class MaintenanceResponse(MaintenanceBase):
     id:   int
@@ -150,7 +152,7 @@ class ReportDetailSchema(BaseModel):
     technician_name:     Optional[str]     = Field(None, description="Nombre del técnico")
     technician_document: Optional[str]     = Field(None, description="Documento del técnico")
     type_maintenance_id:    Optional[int]     = Field(None, description="Tipo de mantenimiento aplicado")
-    type_maintenance_name:     Optional[str] = Field(..., description="Nombre del tipo de mantenimiento")
+    type_maintenance_name: Optional[str] = Field(None, description="Nombre del tipo de mantenimiento")
     fault_remarks:       Optional[str]     = Field(None, description="Observaciones del fallo detectado")
     solution_name:       Optional[str]     = Field(None, description="Nombre de la solución aplicada")
     solution_remarks:    Optional[str]     = Field(None, description="Observaciones de la solución")
@@ -165,7 +167,6 @@ class ReportDetailSchema(BaseModel):
 class MaintenanceReportUpdate(BaseModel):
     type_failure_id:      Optional[int]
     description_failure:  Optional[str]
-    maintenance_status_id:Optional[int]
 
 class MaintenanceDetailUpdate(BaseModel):
     fault_remarks:       Optional[str]
