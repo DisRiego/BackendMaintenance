@@ -6,21 +6,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-raw = os.getenv("FIREBASE_CREDENTIALS")
-if not raw:
+firebase_credentials_path = os.getenv("FIREBASE_CREDENTIALS")
+if not firebase_credentials_path:
     raise ValueError("FIREBASE_CREDENTIALS no está definido en .env o está vacío.")
 
-# Eliminar comillas externas si existen
-raw = raw.strip()
-if (raw.startswith("'") and raw.endswith("'")) or (raw.startswith('"') and raw.endswith('"')):
-    raw = raw[1:-1]
+# Asegurarse de que la ruta sea correcta
+firebase_credentials_path = os.path.join(os.path.dirname(__file__), '..', firebase_credentials_path)
 
-# Decodificar caracteres escapados
-unescaped = raw.encode('utf-8').decode('unicode_escape')
-firebase_credentials = json.loads(unescaped)
-
-# Asegurarse de que la clave privada tenga saltos de línea correctos
-firebase_credentials["private_key"] = firebase_credentials["private_key"].replace("\\n", "\n").strip()
+# Cargar el archivo de credenciales
+try:
+    with open(firebase_credentials_path, 'r') as f:
+        firebase_credentials = json.load(f)
+except Exception as e:
+    raise ValueError(f"Error al cargar el archivo de credenciales: {e}")
 
 storage_bucket = os.getenv("FIREBASE_STORAGE_BUCKET")
 if not storage_bucket:
