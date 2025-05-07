@@ -20,6 +20,7 @@ from app.maintenance.models import (
     PropertyLot,
     PropertyUser,
     TypeFailure,
+    Notification,
     Vars,
     Property,
     MaintenanceType,
@@ -106,6 +107,25 @@ class MaintenanceService:
         except Exception as e:
             return JSONResponse(status_code=500, content={"success": False, "data": str(e)})
         
+    def create_notification(self, user_id: int, title: str, message: str, notification_type: str):
+        """
+        Crea una notificación para un usuario específico.
+        """
+        try:
+            notif = Notification(
+                user_id    = user_id,
+                title      = title,
+                message    = message,
+                type       = notification_type,
+                created_at = datetime.utcnow()
+            )
+            self.db.add(notif)
+            self.db.commit()
+            self.db.refresh(notif)
+        except Exception:
+            self.db.rollback()
+
+
     def get_maintenance_types(self) -> List[MaintenanceTypeSchema]:
             """
             Obtener todos los tipos de mantenimiento y devolver como lista de MaintenanceTypeSchema.
@@ -166,6 +186,12 @@ class MaintenanceService:
         self.db.commit()
         self.db.refresh(assignment)
 
+        self.create_notification(
+           user_id           = assignment.user_id,
+           title             = "Nueva asignación de mantenimiento",
+           message           = f"Te han asignado el mantenimiento #{maintenance_id}.",
+           notification_type = "maintenance_assignment"
+       )
         result = {
             "id": assignment.id,
             "maintenance_id": assignment.maintenance_id,
@@ -292,6 +318,14 @@ class MaintenanceService:
         self.db.add(assignment)
         self.db.commit()
         self.db.refresh(assignment)
+
+
+        self.create_notification(
+           user_id           = assignment.user_id,
+           title             = "Nueva asignación de reporte",
+           message           = f"Te han asignado el reporte #{report_id}.",
+           notification_type = "report_assignment"
+        )
 
         result = {
             "id":        assignment.id,
@@ -465,6 +499,14 @@ class MaintenanceService:
             self.db.commit()
             self.db.refresh(detail)
 
+            
+            # Notificación de finalización
+            self.create_notification(
+                    user_id=asgmt.user_id,
+                    title="Mantenimiento finalizado",
+                    message=f"Has finalizado la asignación #{asgmt.id}.",
+                notification_type="maintenance_finalized"
+            )
             return JSONResponse(status_code=200, content=jsonable_encoder({"success": True, "data": detail}))
 
     
@@ -824,6 +866,14 @@ class MaintenanceService:
         asgmt.assignment_date = assignment_date
         self.db.commit()
         self.db.refresh(asgmt)
+
+        # Notificación de reasignación
+        self.create_notification(
+            user_id=user_id,
+            title="Mantenimiento reasignado",
+            message=f"Te han reasignado el mantenimiento #{maintenance_id}.",
+            notification_type="maintenance_reassignment"
+        )
         result = {
             "id":               asgmt.id,
             "maintenance_id":   asgmt.maintenance_id,
@@ -844,6 +894,16 @@ class MaintenanceService:
         asgmt.assignment_date = assignment_date
         self.db.commit()
         self.db.refresh(asgmt)
+
+
+                # Notificación de reasignación
+        self.create_notification(
+            user_id=user_id,
+            title="Reporte reasignado",
+            message=f"Te han reasignado el reporte #{report_id}.",
+            notification_type="report_reassignment"
+        )
+
         result = {
             "id":               asgmt.id,
             "report_id":        asgmt.report_id,
