@@ -3,7 +3,7 @@
 from datetime import datetime
 from sqlalchemy import (
     Table, Column, Integer, String, DateTime, JSON, ForeignKey,
-    Float, Date, CheckConstraint
+    Float, Date, CheckConstraint , Boolean
 )
 from sqlalchemy.orm import relationship, validates
 from app.database import Base
@@ -222,6 +222,25 @@ class TypeFailure(Base):
     name        = Column(String(100), nullable=False)
     description = Column(String(45), nullable=False)
 
+
+class Notification(Base):
+    """Modelo para almacenar notificaciones de usuarios"""
+    __tablename__ = "notifications"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    user_id    = Column(Integer, ForeignKey('users.id'), nullable=False)
+    title      = Column(String,  nullable=False)
+    message    = Column(String,  nullable=False)
+    type       = Column(String,  nullable=False)  # p.ej. 'maintenance_assignment'
+    read       = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # relación inversa
+    user = relationship("User", backref="notifications")
+
+    def __repr__(self):
+        return f"<Notification(id={self.id}, type={self.type}, user_id={self.user_id})>"
+    
 
 class Maintenance(Base):
     __tablename__ = 'maintenance'
