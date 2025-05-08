@@ -13,7 +13,7 @@ def db_session():
     db = SessionLocal()
     
     # Usamos los datos preexistentes en lugar de generar datos aleatorios
-    maintenance_id = 10  # ID de mantenimiento preexistente
+    maintenance_id = 11  # Usamos el ID de mantenimiento preexistente con status_id correcto
     device_iot_id = 20  # ID de dispositivo IoT preexistente
     lot_id = 1  # ID de lote preexistente
     property_id = 8  # ID de propiedad preexistente
@@ -61,8 +61,8 @@ def client(db_session):
 
 # Prueba de la funcionalidad de obtener detalles del mantenimiento
 def test_get_maintenance_detail(client, db_session):
-    # Usamos el ID de mantenimiento preexistente (10)
-    maintenance_id = 10
+    # Usamos el ID de mantenimiento preexistente (11)
+    maintenance_id = 11
     
     # Realizar la solicitud GET
     response = client.get(f"/maintenance/{maintenance_id}/detail")
