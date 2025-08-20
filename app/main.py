@@ -6,7 +6,8 @@ from app.exceptions import setup_exception_handlers
 import threading
 
 # **Configurar FastAPI**
-app = FastAPI( 
+app = FastAPI(
+    root_path="/disriego/maintenance",
     title="Distrito de Riego API Gateway - Mantenimiento",
     description="API Gateway para Mantenimiento en el sistema de riego",
     version="1.0.0"
